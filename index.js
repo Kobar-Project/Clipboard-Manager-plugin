@@ -125,6 +125,30 @@
     globalState.slots = newSlots;
     notify();
   };
+  window.KoBarClipboardAPI = {
+    forceAddClipboardItem: (type, content) => {
+      let newSlots = [...globalState.slots];
+      const listeningIndex = newSlots.findIndex((s) => s.state === "listening");
+      const targetIndex = listeningIndex !== -1 ? listeningIndex : newSlots.findIndex((s) => s.state === "empty");
+      if (targetIndex !== -1) {
+        newSlots[targetIndex] = { state: "filled", type, content };
+        if (globalState.isCopyModeActive && listeningIndex !== -1) {
+          const nextEmptyIndex = newSlots.findIndex((s, i) => i > targetIndex && s.state === "empty");
+          if (nextEmptyIndex !== -1) {
+            newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: "listening" };
+          } else {
+            globalState.isCopyModeActive = false;
+            window.api?.stopClipboardListener?.();
+          }
+        }
+      } else {
+        newSlots.shift();
+        newSlots.push({ state: "filled", type, content });
+      }
+      globalState.slots = newSlots;
+      notify();
+    }
+  };
   const pasteNextItem = () => {
     if (!globalState.isPasteModeActive) return;
     const selectedIndex = globalState.slots.findIndex((s) => s.state === "selected");
@@ -337,7 +361,7 @@
         document.body
       );
     };
-    return /* @__PURE__ */ window.React.createElement("div", { className: `flex ${orientation === "horizontal" ? "flex-row" : "flex-col"} items-center gap-2 relative no-drag-region` }, /* @__PURE__ */ window.React.createElement(
+    return /* @__PURE__ */ window.React.createElement("div", { className: `flex ${orientation === "horizontal" ? "flex-row h-full" : "flex-col w-full"} items-center justify-center gap-2 relative no-drag-region` }, /* @__PURE__ */ window.React.createElement(
       TooltipButton,
       {
         onClick: toggleCopyMode,
@@ -346,7 +370,7 @@
         label: isCopyModeActive ? t("stopCopyMode") : t("startCopyMode")
       },
       /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined text-[24px]" }, "content_copy")
-    ), /* @__PURE__ */ window.React.createElement("div", { className: `grid ${orientation === "horizontal" ? "grid-rows-2 grid-flow-col gap-1.5" : "grid-cols-4 gap-2"} justify-items-center relative`, onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => /* @__PURE__ */ window.React.createElement(
+    ), /* @__PURE__ */ window.React.createElement("div", { className: `flex flex-wrap justify-center content-center ${orientation === "horizontal" ? "gap-1.5 h-full max-h-[80px]" : "gap-2 w-full max-w-full px-1"} relative`, onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => /* @__PURE__ */ window.React.createElement(
       "label",
       {
         key: index,

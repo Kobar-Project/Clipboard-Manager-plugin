@@ -141,6 +141,33 @@ const addClipboardItem = (type, content) => {
     notify();
 };
 
+window.KoBarClipboardAPI = {
+    forceAddClipboardItem: (type, content) => {
+        let newSlots = [...globalState.slots];
+        const listeningIndex = newSlots.findIndex(s => s.state === 'listening');
+        const targetIndex = listeningIndex !== -1 ? listeningIndex : newSlots.findIndex(s => s.state === 'empty');
+        
+        if (targetIndex !== -1) {
+            newSlots[targetIndex] = { state: 'filled', type, content };
+            if (globalState.isCopyModeActive && listeningIndex !== -1) {
+                const nextEmptyIndex = newSlots.findIndex((s, i) => i > targetIndex && s.state === 'empty');
+                if (nextEmptyIndex !== -1) {
+                    newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: 'listening' };
+                } else {
+                    globalState.isCopyModeActive = false;
+                    window.api?.stopClipboardListener?.();
+                }
+            }
+        } else {
+            // FIFO: Drop the first slot and add to the end
+            newSlots.shift();
+            newSlots.push({ state: 'filled', type, content });
+        }
+        globalState.slots = newSlots;
+        notify();
+    }
+};
+
 const pasteNextItem = () => {
     if (!globalState.isPasteModeActive) return;
     const selectedIndex = globalState.slots.findIndex(s => s.state === 'selected');
@@ -398,7 +425,7 @@ const InlineClipboardUI = () => {
     };
 
     return (
-        <div className={`flex ${orientation === 'horizontal' ? 'flex-row' : 'flex-col'} items-center gap-2 relative no-drag-region`}>
+        <div className={`flex ${orientation === 'horizontal' ? 'flex-row h-full' : 'flex-col w-full'} items-center justify-center gap-2 relative no-drag-region`}>
             {/* Copy Button */}
             <TooltipButton
                 onClick={toggleCopyMode}
@@ -414,7 +441,7 @@ const InlineClipboardUI = () => {
             </TooltipButton>
 
             {/* Slots Grid */}
-            <div className={`grid ${orientation === 'horizontal' ? 'grid-rows-2 grid-flow-col gap-1.5' : 'grid-cols-4 gap-2'} justify-items-center relative`} onClick={e => e.stopPropagation()}>
+            <div className={`flex flex-wrap justify-center content-center ${orientation === 'horizontal' ? 'gap-1.5 h-full max-h-[80px]' : 'gap-2 w-full max-w-full px-1'} relative`} onClick={e => e.stopPropagation()}>
                 {slots.map((slot, index) => (
                     <label
                         key={index}
