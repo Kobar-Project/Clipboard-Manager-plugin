@@ -1,5 +1,1231 @@
-(function(react, reactDom) {
+(function(React, reactDom) {
   "use strict";
+  const createStoreImpl = (createState) => {
+    let state;
+    const listeners = /* @__PURE__ */ new Set();
+    const setState = (partial, replace) => {
+      const nextState = typeof partial === "function" ? partial(state) : partial;
+      if (!Object.is(nextState, state)) {
+        const previousState = state;
+        state = (replace != null ? replace : typeof nextState !== "object" || nextState === null) ? nextState : Object.assign({}, state, nextState);
+        listeners.forEach((listener) => listener(state, previousState));
+      }
+    };
+    const getState = () => state;
+    const getInitialState = () => initialState;
+    const subscribe = (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    };
+    const api = { setState, getState, getInitialState, subscribe };
+    const initialState = state = createState(setState, getState, api);
+    return api;
+  };
+  const createStore = ((createState) => createState ? createStoreImpl(createState) : createStoreImpl);
+  const identity = (arg) => arg;
+  function useStore(api, selector = identity) {
+    const slice = React.useSyncExternalStore(
+      api.subscribe,
+      React.useCallback(() => selector(api.getState()), [api, selector]),
+      React.useCallback(() => selector(api.getInitialState()), [api, selector])
+    );
+    React.useDebugValue(slice);
+    return slice;
+  }
+  const createImpl = (createState) => {
+    const api = createStore(createState);
+    const useBoundStore = (selector) => useStore(api, selector);
+    Object.assign(useBoundStore, api);
+    return useBoundStore;
+  };
+  const create = ((createState) => createState ? createImpl(createState) : createImpl);
+  const min = Math.min;
+  const max = Math.max;
+  const round = Math.round;
+  const createCoords = (v) => ({
+    x: v,
+    y: v
+  });
+  const oppositeSideMap = {
+    left: "right",
+    right: "left",
+    bottom: "top",
+    top: "bottom"
+  };
+  function clamp(start, value, end) {
+    return max(start, min(value, end));
+  }
+  function evaluate(value, param) {
+    return typeof value === "function" ? value(param) : value;
+  }
+  function getSide(placement) {
+    return placement.split("-")[0];
+  }
+  function getAlignment(placement) {
+    return placement.split("-")[1];
+  }
+  function getOppositeAxis(axis) {
+    return axis === "x" ? "y" : "x";
+  }
+  function getAxisLength(axis) {
+    return axis === "y" ? "height" : "width";
+  }
+  function getSideAxis(placement) {
+    const firstChar = placement[0];
+    return firstChar === "t" || firstChar === "b" ? "y" : "x";
+  }
+  function getAlignmentAxis(placement) {
+    return getOppositeAxis(getSideAxis(placement));
+  }
+  function getAlignmentSides(placement, rects, rtl) {
+    if (rtl === void 0) {
+      rtl = false;
+    }
+    const alignment = getAlignment(placement);
+    const alignmentAxis = getAlignmentAxis(placement);
+    const length = getAxisLength(alignmentAxis);
+    let mainAlignmentSide = alignmentAxis === "x" ? alignment === (rtl ? "end" : "start") ? "right" : "left" : alignment === "start" ? "bottom" : "top";
+    if (rects.reference[length] > rects.floating[length]) {
+      mainAlignmentSide = getOppositePlacement(mainAlignmentSide);
+    }
+    return [mainAlignmentSide, getOppositePlacement(mainAlignmentSide)];
+  }
+  function getExpandedPlacements(placement) {
+    const oppositePlacement = getOppositePlacement(placement);
+    return [getOppositeAlignmentPlacement(placement), oppositePlacement, getOppositeAlignmentPlacement(oppositePlacement)];
+  }
+  function getOppositeAlignmentPlacement(placement) {
+    return placement.includes("start") ? placement.replace("start", "end") : placement.replace("end", "start");
+  }
+  const lrPlacement = ["left", "right"];
+  const rlPlacement = ["right", "left"];
+  const tbPlacement = ["top", "bottom"];
+  const btPlacement = ["bottom", "top"];
+  function getSideList(side, isStart, rtl) {
+    switch (side) {
+      case "top":
+      case "bottom":
+        if (rtl) return isStart ? rlPlacement : lrPlacement;
+        return isStart ? lrPlacement : rlPlacement;
+      case "left":
+      case "right":
+        return isStart ? tbPlacement : btPlacement;
+      default:
+        return [];
+    }
+  }
+  function getOppositeAxisPlacements(placement, flipAlignment, direction, rtl) {
+    const alignment = getAlignment(placement);
+    let list = getSideList(getSide(placement), direction === "start", rtl);
+    if (alignment) {
+      list = list.map((side) => side + "-" + alignment);
+      if (flipAlignment) {
+        list = list.concat(list.map(getOppositeAlignmentPlacement));
+      }
+    }
+    return list;
+  }
+  function getOppositePlacement(placement) {
+    const side = getSide(placement);
+    return oppositeSideMap[side] + placement.slice(side.length);
+  }
+  function expandPaddingObject(padding) {
+    return {
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      ...padding
+    };
+  }
+  function getPaddingObject(padding) {
+    return typeof padding !== "number" ? expandPaddingObject(padding) : {
+      top: padding,
+      right: padding,
+      bottom: padding,
+      left: padding
+    };
+  }
+  function rectToClientRect(rect) {
+    const {
+      x,
+      y,
+      width,
+      height
+    } = rect;
+    return {
+      width,
+      height,
+      top: y,
+      left: x,
+      right: x + width,
+      bottom: y + height,
+      x,
+      y
+    };
+  }
+  function computeCoordsFromPlacement(_ref, placement, rtl) {
+    let {
+      reference,
+      floating
+    } = _ref;
+    const sideAxis = getSideAxis(placement);
+    const alignmentAxis = getAlignmentAxis(placement);
+    const alignLength = getAxisLength(alignmentAxis);
+    const side = getSide(placement);
+    const isVertical = sideAxis === "y";
+    const commonX = reference.x + reference.width / 2 - floating.width / 2;
+    const commonY = reference.y + reference.height / 2 - floating.height / 2;
+    const commonAlign = reference[alignLength] / 2 - floating[alignLength] / 2;
+    let coords;
+    switch (side) {
+      case "top":
+        coords = {
+          x: commonX,
+          y: reference.y - floating.height
+        };
+        break;
+      case "bottom":
+        coords = {
+          x: commonX,
+          y: reference.y + reference.height
+        };
+        break;
+      case "right":
+        coords = {
+          x: reference.x + reference.width,
+          y: commonY
+        };
+        break;
+      case "left":
+        coords = {
+          x: reference.x - floating.width,
+          y: commonY
+        };
+        break;
+      default:
+        coords = {
+          x: reference.x,
+          y: reference.y
+        };
+    }
+    switch (getAlignment(placement)) {
+      case "start":
+        coords[alignmentAxis] -= commonAlign * (rtl && isVertical ? -1 : 1);
+        break;
+      case "end":
+        coords[alignmentAxis] += commonAlign * (rtl && isVertical ? -1 : 1);
+        break;
+    }
+    return coords;
+  }
+  async function detectOverflow(state, options) {
+    var _await$platform$isEle;
+    if (options === void 0) {
+      options = {};
+    }
+    const {
+      x,
+      y,
+      platform: platform2,
+      rects,
+      elements,
+      strategy
+    } = state;
+    const {
+      boundary = "clippingAncestors",
+      rootBoundary = "viewport",
+      elementContext = "floating",
+      altBoundary = false,
+      padding = 0
+    } = evaluate(options, state);
+    const paddingObject = getPaddingObject(padding);
+    const altContext = elementContext === "floating" ? "reference" : "floating";
+    const element = elements[altBoundary ? altContext : elementContext];
+    const clippingClientRect = rectToClientRect(await platform2.getClippingRect({
+      element: ((_await$platform$isEle = await (platform2.isElement == null ? void 0 : platform2.isElement(element))) != null ? _await$platform$isEle : true) ? element : element.contextElement || await (platform2.getDocumentElement == null ? void 0 : platform2.getDocumentElement(elements.floating)),
+      boundary,
+      rootBoundary,
+      strategy
+    }));
+    const rect = elementContext === "floating" ? {
+      x,
+      y,
+      width: rects.floating.width,
+      height: rects.floating.height
+    } : rects.reference;
+    const offsetParent = await (platform2.getOffsetParent == null ? void 0 : platform2.getOffsetParent(elements.floating));
+    const offsetScale = await (platform2.isElement == null ? void 0 : platform2.isElement(offsetParent)) ? await (platform2.getScale == null ? void 0 : platform2.getScale(offsetParent)) || {
+      x: 1,
+      y: 1
+    } : {
+      x: 1,
+      y: 1
+    };
+    const elementClientRect = rectToClientRect(platform2.convertOffsetParentRelativeRectToViewportRelativeRect ? await platform2.convertOffsetParentRelativeRectToViewportRelativeRect({
+      elements,
+      rect,
+      offsetParent,
+      strategy
+    }) : rect);
+    return {
+      top: (clippingClientRect.top - elementClientRect.top + paddingObject.top) / offsetScale.y,
+      bottom: (elementClientRect.bottom - clippingClientRect.bottom + paddingObject.bottom) / offsetScale.y,
+      left: (clippingClientRect.left - elementClientRect.left + paddingObject.left) / offsetScale.x,
+      right: (elementClientRect.right - clippingClientRect.right + paddingObject.right) / offsetScale.x
+    };
+  }
+  const MAX_RESET_COUNT = 50;
+  const computePosition$1 = async (reference, floating, config) => {
+    const {
+      placement = "bottom",
+      strategy = "absolute",
+      middleware = [],
+      platform: platform2
+    } = config;
+    const platformWithDetectOverflow = platform2.detectOverflow ? platform2 : {
+      ...platform2,
+      detectOverflow
+    };
+    const rtl = await (platform2.isRTL == null ? void 0 : platform2.isRTL(floating));
+    let rects = await platform2.getElementRects({
+      reference,
+      floating,
+      strategy
+    });
+    let {
+      x,
+      y
+    } = computeCoordsFromPlacement(rects, placement, rtl);
+    let statefulPlacement = placement;
+    let resetCount = 0;
+    const middlewareData = {};
+    for (let i = 0; i < middleware.length; i++) {
+      const currentMiddleware = middleware[i];
+      if (!currentMiddleware) {
+        continue;
+      }
+      const {
+        name,
+        fn
+      } = currentMiddleware;
+      const {
+        x: nextX,
+        y: nextY,
+        data,
+        reset
+      } = await fn({
+        x,
+        y,
+        initialPlacement: placement,
+        placement: statefulPlacement,
+        strategy,
+        middlewareData,
+        rects,
+        platform: platformWithDetectOverflow,
+        elements: {
+          reference,
+          floating
+        }
+      });
+      x = nextX != null ? nextX : x;
+      y = nextY != null ? nextY : y;
+      middlewareData[name] = {
+        ...middlewareData[name],
+        ...data
+      };
+      if (reset && resetCount < MAX_RESET_COUNT) {
+        resetCount++;
+        if (typeof reset === "object") {
+          if (reset.placement) {
+            statefulPlacement = reset.placement;
+          }
+          if (reset.rects) {
+            rects = reset.rects === true ? await platform2.getElementRects({
+              reference,
+              floating,
+              strategy
+            }) : reset.rects;
+          }
+          ({
+            x,
+            y
+          } = computeCoordsFromPlacement(rects, statefulPlacement, rtl));
+        }
+        i = -1;
+      }
+    }
+    return {
+      x,
+      y,
+      placement: statefulPlacement,
+      strategy,
+      middlewareData
+    };
+  };
+  const flip$1 = function(options) {
+    if (options === void 0) {
+      options = {};
+    }
+    return {
+      name: "flip",
+      options,
+      async fn(state) {
+        var _middlewareData$arrow, _middlewareData$flip;
+        const {
+          placement,
+          middlewareData,
+          rects,
+          initialPlacement,
+          platform: platform2,
+          elements
+        } = state;
+        const {
+          mainAxis: checkMainAxis = true,
+          crossAxis: checkCrossAxis = true,
+          fallbackPlacements: specifiedFallbackPlacements,
+          fallbackStrategy = "bestFit",
+          fallbackAxisSideDirection = "none",
+          flipAlignment = true,
+          ...detectOverflowOptions
+        } = evaluate(options, state);
+        if ((_middlewareData$arrow = middlewareData.arrow) != null && _middlewareData$arrow.alignmentOffset) {
+          return {};
+        }
+        const side = getSide(placement);
+        const initialSideAxis = getSideAxis(initialPlacement);
+        const isBasePlacement = getSide(initialPlacement) === initialPlacement;
+        const rtl = await (platform2.isRTL == null ? void 0 : platform2.isRTL(elements.floating));
+        const fallbackPlacements = specifiedFallbackPlacements || (isBasePlacement || !flipAlignment ? [getOppositePlacement(initialPlacement)] : getExpandedPlacements(initialPlacement));
+        const hasFallbackAxisSideDirection = fallbackAxisSideDirection !== "none";
+        if (!specifiedFallbackPlacements && hasFallbackAxisSideDirection) {
+          fallbackPlacements.push(...getOppositeAxisPlacements(initialPlacement, flipAlignment, fallbackAxisSideDirection, rtl));
+        }
+        const placements = [initialPlacement, ...fallbackPlacements];
+        const overflow = await platform2.detectOverflow(state, detectOverflowOptions);
+        const overflows = [];
+        let overflowsData = ((_middlewareData$flip = middlewareData.flip) == null ? void 0 : _middlewareData$flip.overflows) || [];
+        if (checkMainAxis) {
+          overflows.push(overflow[side]);
+        }
+        if (checkCrossAxis) {
+          const sides = getAlignmentSides(placement, rects, rtl);
+          overflows.push(overflow[sides[0]], overflow[sides[1]]);
+        }
+        overflowsData = [...overflowsData, {
+          placement,
+          overflows
+        }];
+        if (!overflows.every((side2) => side2 <= 0)) {
+          var _middlewareData$flip2, _overflowsData$filter;
+          const nextIndex = (((_middlewareData$flip2 = middlewareData.flip) == null ? void 0 : _middlewareData$flip2.index) || 0) + 1;
+          const nextPlacement = placements[nextIndex];
+          if (nextPlacement) {
+            const ignoreCrossAxisOverflow = checkCrossAxis === "alignment" ? initialSideAxis !== getSideAxis(nextPlacement) : false;
+            if (!ignoreCrossAxisOverflow || // We leave the current main axis only if every placement on that axis
+            // overflows the main axis.
+            overflowsData.every((d) => getSideAxis(d.placement) === initialSideAxis ? d.overflows[0] > 0 : true)) {
+              return {
+                data: {
+                  index: nextIndex,
+                  overflows: overflowsData
+                },
+                reset: {
+                  placement: nextPlacement
+                }
+              };
+            }
+          }
+          let resetPlacement = (_overflowsData$filter = overflowsData.filter((d) => d.overflows[0] <= 0).sort((a, b) => a.overflows[1] - b.overflows[1])[0]) == null ? void 0 : _overflowsData$filter.placement;
+          if (!resetPlacement) {
+            switch (fallbackStrategy) {
+              case "bestFit": {
+                var _overflowsData$filter2;
+                const placement2 = (_overflowsData$filter2 = overflowsData.filter((d) => {
+                  if (hasFallbackAxisSideDirection) {
+                    const currentSideAxis = getSideAxis(d.placement);
+                    return currentSideAxis === initialSideAxis || // Create a bias to the `y` side axis due to horizontal
+                    // reading directions favoring greater width.
+                    currentSideAxis === "y";
+                  }
+                  return true;
+                }).map((d) => [d.placement, d.overflows.filter((overflow2) => overflow2 > 0).reduce((acc, overflow2) => acc + overflow2, 0)]).sort((a, b) => a[1] - b[1])[0]) == null ? void 0 : _overflowsData$filter2[0];
+                if (placement2) {
+                  resetPlacement = placement2;
+                }
+                break;
+              }
+              case "initialPlacement":
+                resetPlacement = initialPlacement;
+                break;
+            }
+          }
+          if (placement !== resetPlacement) {
+            return {
+              reset: {
+                placement: resetPlacement
+              }
+            };
+          }
+        }
+        return {};
+      }
+    };
+  };
+  const originSides = /* @__PURE__ */ new Set(["left", "top"]);
+  async function convertValueToCoords(state, options) {
+    const {
+      placement,
+      platform: platform2,
+      elements
+    } = state;
+    const rtl = await (platform2.isRTL == null ? void 0 : platform2.isRTL(elements.floating));
+    const side = getSide(placement);
+    const alignment = getAlignment(placement);
+    const isVertical = getSideAxis(placement) === "y";
+    const mainAxisMulti = originSides.has(side) ? -1 : 1;
+    const crossAxisMulti = rtl && isVertical ? -1 : 1;
+    const rawValue = evaluate(options, state);
+    let {
+      mainAxis,
+      crossAxis,
+      alignmentAxis
+    } = typeof rawValue === "number" ? {
+      mainAxis: rawValue,
+      crossAxis: 0,
+      alignmentAxis: null
+    } : {
+      mainAxis: rawValue.mainAxis || 0,
+      crossAxis: rawValue.crossAxis || 0,
+      alignmentAxis: rawValue.alignmentAxis
+    };
+    if (alignment && typeof alignmentAxis === "number") {
+      crossAxis = alignment === "end" ? alignmentAxis * -1 : alignmentAxis;
+    }
+    return isVertical ? {
+      x: crossAxis * crossAxisMulti,
+      y: mainAxis * mainAxisMulti
+    } : {
+      x: mainAxis * mainAxisMulti,
+      y: crossAxis * crossAxisMulti
+    };
+  }
+  const offset$1 = function(options) {
+    if (options === void 0) {
+      options = 0;
+    }
+    return {
+      name: "offset",
+      options,
+      async fn(state) {
+        var _middlewareData$offse, _middlewareData$arrow;
+        const {
+          x,
+          y,
+          placement,
+          middlewareData
+        } = state;
+        const diffCoords = await convertValueToCoords(state, options);
+        if (placement === ((_middlewareData$offse = middlewareData.offset) == null ? void 0 : _middlewareData$offse.placement) && (_middlewareData$arrow = middlewareData.arrow) != null && _middlewareData$arrow.alignmentOffset) {
+          return {};
+        }
+        return {
+          x: x + diffCoords.x,
+          y: y + diffCoords.y,
+          data: {
+            ...diffCoords,
+            placement
+          }
+        };
+      }
+    };
+  };
+  const shift$1 = function(options) {
+    if (options === void 0) {
+      options = {};
+    }
+    return {
+      name: "shift",
+      options,
+      async fn(state) {
+        const {
+          x,
+          y,
+          placement,
+          platform: platform2
+        } = state;
+        const {
+          mainAxis: checkMainAxis = true,
+          crossAxis: checkCrossAxis = false,
+          limiter = {
+            fn: (_ref) => {
+              let {
+                x: x2,
+                y: y2
+              } = _ref;
+              return {
+                x: x2,
+                y: y2
+              };
+            }
+          },
+          ...detectOverflowOptions
+        } = evaluate(options, state);
+        const coords = {
+          x,
+          y
+        };
+        const overflow = await platform2.detectOverflow(state, detectOverflowOptions);
+        const crossAxis = getSideAxis(getSide(placement));
+        const mainAxis = getOppositeAxis(crossAxis);
+        let mainAxisCoord = coords[mainAxis];
+        let crossAxisCoord = coords[crossAxis];
+        if (checkMainAxis) {
+          const minSide = mainAxis === "y" ? "top" : "left";
+          const maxSide = mainAxis === "y" ? "bottom" : "right";
+          const min2 = mainAxisCoord + overflow[minSide];
+          const max2 = mainAxisCoord - overflow[maxSide];
+          mainAxisCoord = clamp(min2, mainAxisCoord, max2);
+        }
+        if (checkCrossAxis) {
+          const minSide = crossAxis === "y" ? "top" : "left";
+          const maxSide = crossAxis === "y" ? "bottom" : "right";
+          const min2 = crossAxisCoord + overflow[minSide];
+          const max2 = crossAxisCoord - overflow[maxSide];
+          crossAxisCoord = clamp(min2, crossAxisCoord, max2);
+        }
+        const limitedCoords = limiter.fn({
+          ...state,
+          [mainAxis]: mainAxisCoord,
+          [crossAxis]: crossAxisCoord
+        });
+        return {
+          ...limitedCoords,
+          data: {
+            x: limitedCoords.x - x,
+            y: limitedCoords.y - y,
+            enabled: {
+              [mainAxis]: checkMainAxis,
+              [crossAxis]: checkCrossAxis
+            }
+          }
+        };
+      }
+    };
+  };
+  function hasWindow() {
+    return typeof window !== "undefined";
+  }
+  function getNodeName(node) {
+    if (isNode(node)) {
+      return (node.nodeName || "").toLowerCase();
+    }
+    return "#document";
+  }
+  function getWindow(node) {
+    var _node$ownerDocument;
+    return (node == null || (_node$ownerDocument = node.ownerDocument) == null ? void 0 : _node$ownerDocument.defaultView) || window;
+  }
+  function getDocumentElement(node) {
+    var _ref;
+    return (_ref = (isNode(node) ? node.ownerDocument : node.document) || window.document) == null ? void 0 : _ref.documentElement;
+  }
+  function isNode(value) {
+    if (!hasWindow()) {
+      return false;
+    }
+    return value instanceof Node || value instanceof getWindow(value).Node;
+  }
+  function isElement(value) {
+    if (!hasWindow()) {
+      return false;
+    }
+    return value instanceof Element || value instanceof getWindow(value).Element;
+  }
+  function isHTMLElement(value) {
+    if (!hasWindow()) {
+      return false;
+    }
+    return value instanceof HTMLElement || value instanceof getWindow(value).HTMLElement;
+  }
+  function isShadowRoot(value) {
+    if (!hasWindow() || typeof ShadowRoot === "undefined") {
+      return false;
+    }
+    return value instanceof ShadowRoot || value instanceof getWindow(value).ShadowRoot;
+  }
+  function isOverflowElement(element) {
+    const {
+      overflow,
+      overflowX,
+      overflowY,
+      display
+    } = getComputedStyle$1(element);
+    return /auto|scroll|overlay|hidden|clip/.test(overflow + overflowY + overflowX) && display !== "inline" && display !== "contents";
+  }
+  function isTableElement(element) {
+    return /^(table|td|th)$/.test(getNodeName(element));
+  }
+  function isTopLayer(element) {
+    try {
+      if (element.matches(":popover-open")) {
+        return true;
+      }
+    } catch (_e) {
+    }
+    try {
+      return element.matches(":modal");
+    } catch (_e) {
+      return false;
+    }
+  }
+  const willChangeRe = /transform|translate|scale|rotate|perspective|filter/;
+  const containRe = /paint|layout|strict|content/;
+  const isNotNone = (value) => !!value && value !== "none";
+  let isWebKitValue;
+  function isContainingBlock(elementOrCss) {
+    const css = isElement(elementOrCss) ? getComputedStyle$1(elementOrCss) : elementOrCss;
+    return isNotNone(css.transform) || isNotNone(css.translate) || isNotNone(css.scale) || isNotNone(css.rotate) || isNotNone(css.perspective) || !isWebKit() && (isNotNone(css.backdropFilter) || isNotNone(css.filter)) || willChangeRe.test(css.willChange || "") || containRe.test(css.contain || "");
+  }
+  function getContainingBlock(element) {
+    let currentNode = getParentNode(element);
+    while (isHTMLElement(currentNode) && !isLastTraversableNode(currentNode)) {
+      if (isContainingBlock(currentNode)) {
+        return currentNode;
+      } else if (isTopLayer(currentNode)) {
+        return null;
+      }
+      currentNode = getParentNode(currentNode);
+    }
+    return null;
+  }
+  function isWebKit() {
+    if (isWebKitValue == null) {
+      isWebKitValue = typeof CSS !== "undefined" && CSS.supports && CSS.supports("-webkit-backdrop-filter", "none");
+    }
+    return isWebKitValue;
+  }
+  function isLastTraversableNode(node) {
+    return /^(html|body|#document)$/.test(getNodeName(node));
+  }
+  function getComputedStyle$1(element) {
+    return getWindow(element).getComputedStyle(element);
+  }
+  function getNodeScroll(element) {
+    if (isElement(element)) {
+      return {
+        scrollLeft: element.scrollLeft,
+        scrollTop: element.scrollTop
+      };
+    }
+    return {
+      scrollLeft: element.scrollX,
+      scrollTop: element.scrollY
+    };
+  }
+  function getParentNode(node) {
+    if (getNodeName(node) === "html") {
+      return node;
+    }
+    const result = (
+      // Step into the shadow DOM of the parent of a slotted node.
+      node.assignedSlot || // DOM Element detected.
+      node.parentNode || // ShadowRoot detected.
+      isShadowRoot(node) && node.host || // Fallback.
+      getDocumentElement(node)
+    );
+    return isShadowRoot(result) ? result.host : result;
+  }
+  function getNearestOverflowAncestor(node) {
+    const parentNode = getParentNode(node);
+    if (isLastTraversableNode(parentNode)) {
+      return node.ownerDocument ? node.ownerDocument.body : node.body;
+    }
+    if (isHTMLElement(parentNode) && isOverflowElement(parentNode)) {
+      return parentNode;
+    }
+    return getNearestOverflowAncestor(parentNode);
+  }
+  function getOverflowAncestors(node, list, traverseIframes) {
+    var _node$ownerDocument2;
+    if (list === void 0) {
+      list = [];
+    }
+    const scrollableAncestor = getNearestOverflowAncestor(node);
+    const isBody = scrollableAncestor === ((_node$ownerDocument2 = node.ownerDocument) == null ? void 0 : _node$ownerDocument2.body);
+    const win = getWindow(scrollableAncestor);
+    if (isBody) {
+      getFrameElement(win);
+      return list.concat(win, win.visualViewport || [], isOverflowElement(scrollableAncestor) ? scrollableAncestor : [], []);
+    } else {
+      return list.concat(scrollableAncestor, getOverflowAncestors(scrollableAncestor, []));
+    }
+  }
+  function getFrameElement(win) {
+    return win.parent && Object.getPrototypeOf(win.parent) ? win.frameElement : null;
+  }
+  function getCssDimensions(element) {
+    const css = getComputedStyle$1(element);
+    let width = parseFloat(css.width) || 0;
+    let height = parseFloat(css.height) || 0;
+    const hasOffset = isHTMLElement(element);
+    const offsetWidth = hasOffset ? element.offsetWidth : width;
+    const offsetHeight = hasOffset ? element.offsetHeight : height;
+    const shouldFallback = round(width) !== offsetWidth || round(height) !== offsetHeight;
+    if (shouldFallback) {
+      width = offsetWidth;
+      height = offsetHeight;
+    }
+    return {
+      width,
+      height,
+      $: shouldFallback
+    };
+  }
+  function unwrapElement(element) {
+    return !isElement(element) ? element.contextElement : element;
+  }
+  function getScale(element) {
+    const domElement = unwrapElement(element);
+    if (!isHTMLElement(domElement)) {
+      return createCoords(1);
+    }
+    const rect = domElement.getBoundingClientRect();
+    const {
+      width,
+      height,
+      $
+    } = getCssDimensions(domElement);
+    let x = ($ ? round(rect.width) : rect.width) / width;
+    let y = ($ ? round(rect.height) : rect.height) / height;
+    if (!x || !Number.isFinite(x)) {
+      x = 1;
+    }
+    if (!y || !Number.isFinite(y)) {
+      y = 1;
+    }
+    return {
+      x,
+      y
+    };
+  }
+  const noOffsets = /* @__PURE__ */ createCoords(0);
+  function getVisualOffsets(element) {
+    const win = getWindow(element);
+    if (!isWebKit() || !win.visualViewport) {
+      return noOffsets;
+    }
+    return {
+      x: win.visualViewport.offsetLeft,
+      y: win.visualViewport.offsetTop
+    };
+  }
+  function shouldAddVisualOffsets(element, isFixed, floatingOffsetParent) {
+    if (isFixed === void 0) {
+      isFixed = false;
+    }
+    if (!floatingOffsetParent || isFixed && floatingOffsetParent !== getWindow(element)) {
+      return false;
+    }
+    return isFixed;
+  }
+  function getBoundingClientRect(element, includeScale, isFixedStrategy, offsetParent) {
+    if (includeScale === void 0) {
+      includeScale = false;
+    }
+    if (isFixedStrategy === void 0) {
+      isFixedStrategy = false;
+    }
+    const clientRect = element.getBoundingClientRect();
+    const domElement = unwrapElement(element);
+    let scale = createCoords(1);
+    if (includeScale) {
+      if (offsetParent) {
+        if (isElement(offsetParent)) {
+          scale = getScale(offsetParent);
+        }
+      } else {
+        scale = getScale(element);
+      }
+    }
+    const visualOffsets = shouldAddVisualOffsets(domElement, isFixedStrategy, offsetParent) ? getVisualOffsets(domElement) : createCoords(0);
+    let x = (clientRect.left + visualOffsets.x) / scale.x;
+    let y = (clientRect.top + visualOffsets.y) / scale.y;
+    let width = clientRect.width / scale.x;
+    let height = clientRect.height / scale.y;
+    if (domElement) {
+      const win = getWindow(domElement);
+      const offsetWin = offsetParent && isElement(offsetParent) ? getWindow(offsetParent) : offsetParent;
+      let currentWin = win;
+      let currentIFrame = getFrameElement(currentWin);
+      while (currentIFrame && offsetParent && offsetWin !== currentWin) {
+        const iframeScale = getScale(currentIFrame);
+        const iframeRect = currentIFrame.getBoundingClientRect();
+        const css = getComputedStyle$1(currentIFrame);
+        const left = iframeRect.left + (currentIFrame.clientLeft + parseFloat(css.paddingLeft)) * iframeScale.x;
+        const top = iframeRect.top + (currentIFrame.clientTop + parseFloat(css.paddingTop)) * iframeScale.y;
+        x *= iframeScale.x;
+        y *= iframeScale.y;
+        width *= iframeScale.x;
+        height *= iframeScale.y;
+        x += left;
+        y += top;
+        currentWin = getWindow(currentIFrame);
+        currentIFrame = getFrameElement(currentWin);
+      }
+    }
+    return rectToClientRect({
+      width,
+      height,
+      x,
+      y
+    });
+  }
+  function getWindowScrollBarX(element, rect) {
+    const leftScroll = getNodeScroll(element).scrollLeft;
+    if (!rect) {
+      return getBoundingClientRect(getDocumentElement(element)).left + leftScroll;
+    }
+    return rect.left + leftScroll;
+  }
+  function getHTMLOffset(documentElement, scroll) {
+    const htmlRect = documentElement.getBoundingClientRect();
+    const x = htmlRect.left + scroll.scrollLeft - getWindowScrollBarX(documentElement, htmlRect);
+    const y = htmlRect.top + scroll.scrollTop;
+    return {
+      x,
+      y
+    };
+  }
+  function convertOffsetParentRelativeRectToViewportRelativeRect(_ref) {
+    let {
+      elements,
+      rect,
+      offsetParent,
+      strategy
+    } = _ref;
+    const isFixed = strategy === "fixed";
+    const documentElement = getDocumentElement(offsetParent);
+    const topLayer = elements ? isTopLayer(elements.floating) : false;
+    if (offsetParent === documentElement || topLayer && isFixed) {
+      return rect;
+    }
+    let scroll = {
+      scrollLeft: 0,
+      scrollTop: 0
+    };
+    let scale = createCoords(1);
+    const offsets = createCoords(0);
+    const isOffsetParentAnElement = isHTMLElement(offsetParent);
+    if (isOffsetParentAnElement || !isOffsetParentAnElement && !isFixed) {
+      if (getNodeName(offsetParent) !== "body" || isOverflowElement(documentElement)) {
+        scroll = getNodeScroll(offsetParent);
+      }
+      if (isOffsetParentAnElement) {
+        const offsetRect = getBoundingClientRect(offsetParent);
+        scale = getScale(offsetParent);
+        offsets.x = offsetRect.x + offsetParent.clientLeft;
+        offsets.y = offsetRect.y + offsetParent.clientTop;
+      }
+    }
+    const htmlOffset = documentElement && !isOffsetParentAnElement && !isFixed ? getHTMLOffset(documentElement, scroll) : createCoords(0);
+    return {
+      width: rect.width * scale.x,
+      height: rect.height * scale.y,
+      x: rect.x * scale.x - scroll.scrollLeft * scale.x + offsets.x + htmlOffset.x,
+      y: rect.y * scale.y - scroll.scrollTop * scale.y + offsets.y + htmlOffset.y
+    };
+  }
+  function getClientRects(element) {
+    return Array.from(element.getClientRects());
+  }
+  function getDocumentRect(element) {
+    const html = getDocumentElement(element);
+    const scroll = getNodeScroll(element);
+    const body = element.ownerDocument.body;
+    const width = max(html.scrollWidth, html.clientWidth, body.scrollWidth, body.clientWidth);
+    const height = max(html.scrollHeight, html.clientHeight, body.scrollHeight, body.clientHeight);
+    let x = -scroll.scrollLeft + getWindowScrollBarX(element);
+    const y = -scroll.scrollTop;
+    if (getComputedStyle$1(body).direction === "rtl") {
+      x += max(html.clientWidth, body.clientWidth) - width;
+    }
+    return {
+      width,
+      height,
+      x,
+      y
+    };
+  }
+  const SCROLLBAR_MAX = 25;
+  function getViewportRect(element, strategy) {
+    const win = getWindow(element);
+    const html = getDocumentElement(element);
+    const visualViewport = win.visualViewport;
+    let width = html.clientWidth;
+    let height = html.clientHeight;
+    let x = 0;
+    let y = 0;
+    if (visualViewport) {
+      width = visualViewport.width;
+      height = visualViewport.height;
+      const visualViewportBased = isWebKit();
+      if (!visualViewportBased || visualViewportBased && strategy === "fixed") {
+        x = visualViewport.offsetLeft;
+        y = visualViewport.offsetTop;
+      }
+    }
+    const windowScrollbarX = getWindowScrollBarX(html);
+    if (windowScrollbarX <= 0) {
+      const doc = html.ownerDocument;
+      const body = doc.body;
+      const bodyStyles = getComputedStyle(body);
+      const bodyMarginInline = doc.compatMode === "CSS1Compat" ? parseFloat(bodyStyles.marginLeft) + parseFloat(bodyStyles.marginRight) || 0 : 0;
+      const clippingStableScrollbarWidth = Math.abs(html.clientWidth - body.clientWidth - bodyMarginInline);
+      if (clippingStableScrollbarWidth <= SCROLLBAR_MAX) {
+        width -= clippingStableScrollbarWidth;
+      }
+    } else if (windowScrollbarX <= SCROLLBAR_MAX) {
+      width += windowScrollbarX;
+    }
+    return {
+      width,
+      height,
+      x,
+      y
+    };
+  }
+  function getInnerBoundingClientRect(element, strategy) {
+    const clientRect = getBoundingClientRect(element, true, strategy === "fixed");
+    const top = clientRect.top + element.clientTop;
+    const left = clientRect.left + element.clientLeft;
+    const scale = isHTMLElement(element) ? getScale(element) : createCoords(1);
+    const width = element.clientWidth * scale.x;
+    const height = element.clientHeight * scale.y;
+    const x = left * scale.x;
+    const y = top * scale.y;
+    return {
+      width,
+      height,
+      x,
+      y
+    };
+  }
+  function getClientRectFromClippingAncestor(element, clippingAncestor, strategy) {
+    let rect;
+    if (clippingAncestor === "viewport") {
+      rect = getViewportRect(element, strategy);
+    } else if (clippingAncestor === "document") {
+      rect = getDocumentRect(getDocumentElement(element));
+    } else if (isElement(clippingAncestor)) {
+      rect = getInnerBoundingClientRect(clippingAncestor, strategy);
+    } else {
+      const visualOffsets = getVisualOffsets(element);
+      rect = {
+        x: clippingAncestor.x - visualOffsets.x,
+        y: clippingAncestor.y - visualOffsets.y,
+        width: clippingAncestor.width,
+        height: clippingAncestor.height
+      };
+    }
+    return rectToClientRect(rect);
+  }
+  function hasFixedPositionAncestor(element, stopNode) {
+    const parentNode = getParentNode(element);
+    if (parentNode === stopNode || !isElement(parentNode) || isLastTraversableNode(parentNode)) {
+      return false;
+    }
+    return getComputedStyle$1(parentNode).position === "fixed" || hasFixedPositionAncestor(parentNode, stopNode);
+  }
+  function getClippingElementAncestors(element, cache) {
+    const cachedResult = cache.get(element);
+    if (cachedResult) {
+      return cachedResult;
+    }
+    let result = getOverflowAncestors(element, []).filter((el) => isElement(el) && getNodeName(el) !== "body");
+    let currentContainingBlockComputedStyle = null;
+    const elementIsFixed = getComputedStyle$1(element).position === "fixed";
+    let currentNode = elementIsFixed ? getParentNode(element) : element;
+    while (isElement(currentNode) && !isLastTraversableNode(currentNode)) {
+      const computedStyle = getComputedStyle$1(currentNode);
+      const currentNodeIsContaining = isContainingBlock(currentNode);
+      if (!currentNodeIsContaining && computedStyle.position === "fixed") {
+        currentContainingBlockComputedStyle = null;
+      }
+      const shouldDropCurrentNode = elementIsFixed ? !currentNodeIsContaining && !currentContainingBlockComputedStyle : !currentNodeIsContaining && computedStyle.position === "static" && !!currentContainingBlockComputedStyle && (currentContainingBlockComputedStyle.position === "absolute" || currentContainingBlockComputedStyle.position === "fixed") || isOverflowElement(currentNode) && !currentNodeIsContaining && hasFixedPositionAncestor(element, currentNode);
+      if (shouldDropCurrentNode) {
+        result = result.filter((ancestor) => ancestor !== currentNode);
+      } else {
+        currentContainingBlockComputedStyle = computedStyle;
+      }
+      currentNode = getParentNode(currentNode);
+    }
+    cache.set(element, result);
+    return result;
+  }
+  function getClippingRect(_ref) {
+    let {
+      element,
+      boundary,
+      rootBoundary,
+      strategy
+    } = _ref;
+    const elementClippingAncestors = boundary === "clippingAncestors" ? isTopLayer(element) ? [] : getClippingElementAncestors(element, this._c) : [].concat(boundary);
+    const clippingAncestors = [...elementClippingAncestors, rootBoundary];
+    const firstRect = getClientRectFromClippingAncestor(element, clippingAncestors[0], strategy);
+    let top = firstRect.top;
+    let right = firstRect.right;
+    let bottom = firstRect.bottom;
+    let left = firstRect.left;
+    for (let i = 1; i < clippingAncestors.length; i++) {
+      const rect = getClientRectFromClippingAncestor(element, clippingAncestors[i], strategy);
+      top = max(rect.top, top);
+      right = min(rect.right, right);
+      bottom = min(rect.bottom, bottom);
+      left = max(rect.left, left);
+    }
+    return {
+      width: right - left,
+      height: bottom - top,
+      x: left,
+      y: top
+    };
+  }
+  function getDimensions(element) {
+    const {
+      width,
+      height
+    } = getCssDimensions(element);
+    return {
+      width,
+      height
+    };
+  }
+  function getRectRelativeToOffsetParent(element, offsetParent, strategy) {
+    const isOffsetParentAnElement = isHTMLElement(offsetParent);
+    const documentElement = getDocumentElement(offsetParent);
+    const isFixed = strategy === "fixed";
+    const rect = getBoundingClientRect(element, true, isFixed, offsetParent);
+    let scroll = {
+      scrollLeft: 0,
+      scrollTop: 0
+    };
+    const offsets = createCoords(0);
+    function setLeftRTLScrollbarOffset() {
+      offsets.x = getWindowScrollBarX(documentElement);
+    }
+    if (isOffsetParentAnElement || !isOffsetParentAnElement && !isFixed) {
+      if (getNodeName(offsetParent) !== "body" || isOverflowElement(documentElement)) {
+        scroll = getNodeScroll(offsetParent);
+      }
+      if (isOffsetParentAnElement) {
+        const offsetRect = getBoundingClientRect(offsetParent, true, isFixed, offsetParent);
+        offsets.x = offsetRect.x + offsetParent.clientLeft;
+        offsets.y = offsetRect.y + offsetParent.clientTop;
+      } else if (documentElement) {
+        setLeftRTLScrollbarOffset();
+      }
+    }
+    if (isFixed && !isOffsetParentAnElement && documentElement) {
+      setLeftRTLScrollbarOffset();
+    }
+    const htmlOffset = documentElement && !isOffsetParentAnElement && !isFixed ? getHTMLOffset(documentElement, scroll) : createCoords(0);
+    const x = rect.left + scroll.scrollLeft - offsets.x - htmlOffset.x;
+    const y = rect.top + scroll.scrollTop - offsets.y - htmlOffset.y;
+    return {
+      x,
+      y,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+  function isStaticPositioned(element) {
+    return getComputedStyle$1(element).position === "static";
+  }
+  function getTrueOffsetParent(element, polyfill) {
+    if (!isHTMLElement(element) || getComputedStyle$1(element).position === "fixed") {
+      return null;
+    }
+    if (polyfill) {
+      return polyfill(element);
+    }
+    let rawOffsetParent = element.offsetParent;
+    if (getDocumentElement(element) === rawOffsetParent) {
+      rawOffsetParent = rawOffsetParent.ownerDocument.body;
+    }
+    return rawOffsetParent;
+  }
+  function getOffsetParent(element, polyfill) {
+    const win = getWindow(element);
+    if (isTopLayer(element)) {
+      return win;
+    }
+    if (!isHTMLElement(element)) {
+      let svgOffsetParent = getParentNode(element);
+      while (svgOffsetParent && !isLastTraversableNode(svgOffsetParent)) {
+        if (isElement(svgOffsetParent) && !isStaticPositioned(svgOffsetParent)) {
+          return svgOffsetParent;
+        }
+        svgOffsetParent = getParentNode(svgOffsetParent);
+      }
+      return win;
+    }
+    let offsetParent = getTrueOffsetParent(element, polyfill);
+    while (offsetParent && isTableElement(offsetParent) && isStaticPositioned(offsetParent)) {
+      offsetParent = getTrueOffsetParent(offsetParent, polyfill);
+    }
+    if (offsetParent && isLastTraversableNode(offsetParent) && isStaticPositioned(offsetParent) && !isContainingBlock(offsetParent)) {
+      return win;
+    }
+    return offsetParent || getContainingBlock(element) || win;
+  }
+  const getElementRects = async function(data) {
+    const getOffsetParentFn = this.getOffsetParent || getOffsetParent;
+    const getDimensionsFn = this.getDimensions;
+    const floatingDimensions = await getDimensionsFn(data.floating);
+    return {
+      reference: getRectRelativeToOffsetParent(data.reference, await getOffsetParentFn(data.floating), data.strategy),
+      floating: {
+        x: 0,
+        y: 0,
+        width: floatingDimensions.width,
+        height: floatingDimensions.height
+      }
+    };
+  };
+  function isRTL(element) {
+    return getComputedStyle$1(element).direction === "rtl";
+  }
+  const platform = {
+    convertOffsetParentRelativeRectToViewportRelativeRect,
+    getDocumentElement,
+    getClippingRect,
+    getOffsetParent,
+    getElementRects,
+    getClientRects,
+    getDimensions,
+    getScale,
+    isElement,
+    isRTL
+  };
+  const offset = offset$1;
+  const shift = shift$1;
+  const flip = flip$1;
+  const computePosition = (reference, floating, options) => {
+    const cache = /* @__PURE__ */ new Map();
+    const mergedOptions = {
+      platform,
+      ...options
+    };
+    const platformWithCache = {
+      ...mergedOptions.platform,
+      _c: cache
+    };
+    return computePosition$1(reference, floating, {
+      ...mergedOptions,
+      platform: platformWithCache
+    });
+  };
   const TRANSLATIONS = {
     en: { copy: "Copy", paste: "Paste", numberOfSlots: "Number of Clipboard Slots", slotsMinMaxInfo: "Min: 4, Max: 20 slots.", emptySlotTip: "Copy items to fill slots", stopCopyMode: "Stop Copy Mode", startCopyMode: "Start Copy Mode", stopPasteMode: "Stop Paste Mode", startPasteMode: "Start Paste Mode", autoAddClipboard: "Auto-add to Clipboard", autoAddClipboardDesc: "Automatically send picked colors to the Sequential Clipboard slots.", imagePreview: "Image Content", copyAndPaste: "Copy & Paste", settings: "Settings" },
     tr: { copy: "Kopyala", paste: "Yapıştır", numberOfSlots: "Pano Slot Sayısı", slotsMinMaxInfo: "Min: 4, Maks: 20 slot.", emptySlotTip: "Slotları doldurmak için kopyalama yapın", stopCopyMode: "Kopyalama Modunu Durdur", startCopyMode: "Kopyalama Modunu Başlat", stopPasteMode: "Yapıştırma Modunu Durdur", startPasteMode: "Yapıştırma Modunu Başlat", autoAddClipboard: "Panoya Otomatik Ekle", autoAddClipboardDesc: "Seçilen renkleri otomatik olarak Sıralı Pano yuvalarına gönderir.", imagePreview: "Resim İçeriği", copyAndPaste: "Kopyala ve Yapıştır", settings: "Ayarlar" },
@@ -13,131 +1239,169 @@
     hi: { copy: "कॉपी", paste: "पेस्ट", numberOfSlots: "स्लॉट की संख्या", slotsMinMaxInfo: "न्यूनतम: 4, अधिकतम: 20.", emptySlotTip: "स्लॉट भरने के लिए कॉपी करें", stopCopyMode: "कॉपी मोड रोकें", startCopyMode: "कॉपी मोड प्रारंभ करें", stopPasteMode: "पेस्ट मोड रोकें", startPasteMode: "पेस्ट मोड प्रारंभ करें", autoAddClipboard: "स्वतः जोड़ें", autoAddClipboardDesc: "स्लॉट में स्वतः रंग भेजें।", imagePreview: "छवि सामग्री", copyAndPaste: "कॉपी और पेस्ट", settings: "सेटिंग्स" }
   };
   const t = (key) => {
-    const store = window.useAppStore.getState();
+    const store = window.useAppStore?.getState() || { language: "en" };
     const lang = store.language || "en";
     const dict = TRANSLATIONS[lang] || TRANSLATIONS["en"];
     return dict[key] || TRANSLATIONS["en"][key] || key;
   };
-  let globalState = {
-    slots: Array(8).fill().map(() => ({ state: "empty", type: null, content: null })),
-    slotCount: 8,
-    isCopyModeActive: false,
-    isPasteModeActive: false,
-    autoHideDuration: 5e3
-  };
+  let initialSlotCount = 8;
+  let initialAutoHideDuration = 5e3;
   try {
     const saved = localStorage.getItem("kobar-plugin-clipboard-settings");
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.slotCount) {
-        globalState.slotCount = parsed.slotCount;
-        globalState.slots = Array(parsed.slotCount).fill().map(() => ({ state: "empty", type: null, content: null }));
-      }
-      if (parsed.autoHideDuration !== void 0) {
-        globalState.autoHideDuration = parsed.autoHideDuration;
-      }
+      if (parsed.slotCount) initialSlotCount = parsed.slotCount;
+      if (parsed.autoHideDuration !== void 0) initialAutoHideDuration = parsed.autoHideDuration;
     }
   } catch (e) {
   }
-  let listeners = /* @__PURE__ */ new Set();
-  const notify = () => listeners.forEach((l) => l());
-  const usePluginStore = () => {
-    const [state, setState] = react.useState(globalState);
-    react.useEffect(() => {
-      const listener = () => setState({ ...globalState });
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    }, []);
-    return state;
-  };
-  const setSlotCount = (count) => {
-    if (count > globalState.slots.length) {
-      const addedSlots = Array(count - globalState.slots.length).fill().map(() => ({ state: "empty", type: null, content: null }));
-      globalState.slots = [...globalState.slots, ...addedSlots];
-    } else if (count < globalState.slots.length) {
-      globalState.slots = globalState.slots.slice(0, count);
-    }
-    globalState.slotCount = count;
-    localStorage.setItem("kobar-plugin-clipboard-settings", JSON.stringify({
-      slotCount: count,
-      autoHideDuration: globalState.autoHideDuration
-    }));
-    notify();
-  };
-  const setAutoHideDuration = (ms) => {
-    globalState.autoHideDuration = ms;
-    localStorage.setItem("kobar-plugin-clipboard-settings", JSON.stringify({
-      slotCount: globalState.slotCount,
-      autoHideDuration: ms
-    }));
-    notify();
-  };
-  const toggleCopyMode = () => {
-    if (globalState.isCopyModeActive) {
-      globalState.slots = globalState.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s);
-      globalState.isCopyModeActive = false;
-      window.api?.stopClipboardListener?.();
-    } else {
-      globalState.slots = globalState.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s);
-      const firstEmpty = globalState.slots.findIndex((s) => s.state === "empty");
-      if (firstEmpty !== -1) {
-        globalState.slots = [...globalState.slots];
-        globalState.slots[firstEmpty] = { ...globalState.slots[firstEmpty], state: "listening" };
-        globalState.isCopyModeActive = true;
-        globalState.isPasteModeActive = false;
-        window.api?.startClipboardListener?.();
+  const usePluginStore = create((set, get) => ({
+    slots: Array(initialSlotCount).fill().map(() => ({ state: "empty", type: null, content: null })),
+    slotCount: initialSlotCount,
+    isCopyModeActive: false,
+    isPasteModeActive: false,
+    autoHideDuration: initialAutoHideDuration,
+    setSlotCount: (count) => set((state) => {
+      let newSlots = [...state.slots];
+      if (count > newSlots.length) {
+        const addedSlots = Array(count - newSlots.length).fill().map(() => ({ state: "empty", type: null, content: null }));
+        newSlots = [...newSlots, ...addedSlots];
+      } else if (count < newSlots.length) {
+        newSlots = newSlots.slice(0, count);
       }
-    }
-    notify();
-  };
-  const togglePasteMode = () => {
-    if (globalState.isPasteModeActive) {
-      globalState.slots = globalState.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s);
-      globalState.isPasteModeActive = false;
-      window.api?.setGlobalPasteMode?.(false);
-    } else {
-      globalState.slots = globalState.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s);
-      const firstFilled = globalState.slots.findIndex((s) => s.state === "filled");
-      if (firstFilled !== -1) {
-        globalState.slots = [...globalState.slots];
-        globalState.slots[firstFilled] = { ...globalState.slots[firstFilled], state: "selected" };
-        globalState.isPasteModeActive = true;
-        globalState.isCopyModeActive = false;
+      localStorage.setItem("kobar-plugin-clipboard-settings", JSON.stringify({
+        slotCount: count,
+        autoHideDuration: state.autoHideDuration
+      }));
+      return { slotCount: count, slots: newSlots };
+    }),
+    setAutoHideDuration: (ms) => set((state) => {
+      localStorage.setItem("kobar-plugin-clipboard-settings", JSON.stringify({
+        slotCount: state.slotCount,
+        autoHideDuration: ms
+      }));
+      return { autoHideDuration: ms };
+    }),
+    toggleCopyMode: () => set((state) => {
+      if (state.isCopyModeActive) {
         window.api?.stopClipboardListener?.();
-        window.api?.setGlobalPasteMode?.(true);
+        return {
+          isCopyModeActive: false,
+          slots: state.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s)
+        };
+      } else {
+        const firstEmpty = state.slots.findIndex((s) => s.state === "empty");
+        if (firstEmpty !== -1) {
+          window.api?.startClipboardListener?.();
+          const newSlots = [...state.slots];
+          newSlots[firstEmpty] = { ...newSlots[firstEmpty], state: "listening" };
+          return {
+            isCopyModeActive: true,
+            isPasteModeActive: false,
+            slots: newSlots
+          };
+        }
       }
-    }
-    notify();
-  };
-  const addClipboardItem = (type, content) => {
-    if (!globalState.isCopyModeActive) return;
-    const listeningIndex = globalState.slots.findIndex((s) => s.state === "listening");
-    if (listeningIndex === -1) return;
-    let newSlots = [...globalState.slots];
-    newSlots[listeningIndex] = { state: "filled", type, content };
-    const nextEmptyIndex = newSlots.findIndex((s, i) => i > listeningIndex && s.state === "empty");
-    if (nextEmptyIndex !== -1) {
-      newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: "listening" };
-    } else {
-      globalState.isCopyModeActive = false;
+      return state;
+    }),
+    togglePasteMode: () => set((state) => {
+      if (state.isPasteModeActive) {
+        window.api?.setGlobalPasteMode?.(false);
+        return {
+          isPasteModeActive: false,
+          slots: state.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s)
+        };
+      } else {
+        const firstFilled = state.slots.findIndex((s) => s.state === "filled");
+        if (firstFilled !== -1) {
+          window.api?.stopClipboardListener?.();
+          window.api?.setGlobalPasteMode?.(true);
+          const newSlots = state.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s);
+          newSlots[firstFilled] = { ...newSlots[firstFilled], state: "selected" };
+          return {
+            isPasteModeActive: true,
+            isCopyModeActive: false,
+            slots: newSlots
+          };
+        }
+      }
+      return state;
+    }),
+    addClipboardItem: (type, content) => set((state) => {
+      if (!state.isCopyModeActive) return state;
+      const listeningIndex = state.slots.findIndex((s) => s.state === "listening");
+      if (listeningIndex === -1) return state;
+      let newSlots = [...state.slots];
+      newSlots[listeningIndex] = { state: "filled", type, content };
+      const nextEmptyIndex = newSlots.findIndex((s, i) => i > listeningIndex && s.state === "empty");
+      let isCopyModeActive = true;
+      if (nextEmptyIndex !== -1) {
+        newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: "listening" };
+      } else {
+        isCopyModeActive = false;
+        window.api?.stopClipboardListener?.();
+      }
+      return { slots: newSlots, isCopyModeActive };
+    }),
+    pasteNextItem: () => set((state) => {
+      if (!state.isPasteModeActive) return state;
+      const selectedIndex = state.slots.findIndex((s) => s.state === "selected");
+      if (selectedIndex === -1) return state;
+      let newSlots = [...state.slots];
+      ({ ...newSlots[selectedIndex] });
+      newSlots[selectedIndex] = { state: "empty", type: null, content: null };
+      const nextFilledIndex = newSlots.findIndex((s, i) => i > selectedIndex && s.state === "filled");
+      let isPasteModeActive = true;
+      if (nextFilledIndex !== -1) {
+        newSlots[nextFilledIndex] = { ...newSlots[nextFilledIndex], state: "selected" };
+      } else {
+        isPasteModeActive = false;
+        window.api?.setGlobalPasteMode?.(false);
+      }
+      return { slots: newSlots, isPasteModeActive };
+    }),
+    clearSlot: (index) => set((state) => {
+      if (state.slots[index].state === "filled") {
+        const newSlots = [...state.slots];
+        newSlots[index] = { state: "empty", type: null, content: null };
+        return { slots: newSlots };
+      }
+      return state;
+    }),
+    resetAll: () => set((state) => {
       window.api?.stopClipboardListener?.();
-    }
-    globalState.slots = newSlots;
-    notify();
-  };
-  window.KoBarClipboardAPI = {
-    forceAddClipboardItem: (type, content) => {
-      let newSlots = [...globalState.slots];
+      window.api?.setGlobalPasteMode?.(false);
+      return {
+        slots: Array(state.slotCount).fill().map(() => ({ state: "empty", type: null, content: null })),
+        isCopyModeActive: false,
+        isPasteModeActive: false
+      };
+    }),
+    setListeningSlot: (index) => set((state) => {
+      if (!state.isCopyModeActive || state.slots[index].state !== "empty") return state;
+      let newSlots = state.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s);
+      newSlots[index] = { ...newSlots[index], state: "listening" };
+      return { slots: newSlots };
+    }),
+    setSelectedSlot: (index) => set((state) => {
+      if (!state.isPasteModeActive || state.slots[index].state !== "filled") return state;
+      let newSlots = state.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s);
+      newSlots[index] = { ...newSlots[index], state: "selected" };
+      return { slots: newSlots };
+    }),
+    forceAddClipboardItem: (type, content) => set((state) => {
+      let newSlots = [...state.slots];
       const listeningIndex = newSlots.findIndex((s) => s.state === "listening");
       const targetIndex = listeningIndex !== -1 ? listeningIndex : newSlots.findIndex((s) => s.state === "empty");
+      let isCopyModeActive = state.isCopyModeActive;
       if (targetIndex !== -1) {
         newSlots[targetIndex] = { state: "filled", type, content };
-        if (globalState.isCopyModeActive && listeningIndex !== -1) {
+        if (isCopyModeActive && listeningIndex !== -1) {
           const nextEmptyIndex = newSlots.findIndex((s, i) => i > targetIndex && s.state === "empty");
           if (nextEmptyIndex !== -1) {
             newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: "listening" };
           } else {
-            globalState.isCopyModeActive = false;
+            isCopyModeActive = false;
             window.api?.stopClipboardListener?.();
           }
         }
@@ -145,56 +1409,13 @@
         newSlots.shift();
         newSlots.push({ state: "filled", type, content });
       }
-      globalState.slots = newSlots;
-      notify();
+      return { slots: newSlots, isCopyModeActive };
+    })
+  }));
+  window.KoBarClipboardAPI = {
+    forceAddClipboardItem: (type, content) => {
+      usePluginStore.getState().forceAddClipboardItem(type, content);
     }
-  };
-  const pasteNextItem = () => {
-    if (!globalState.isPasteModeActive) return;
-    const selectedIndex = globalState.slots.findIndex((s) => s.state === "selected");
-    if (selectedIndex === -1) return;
-    let newSlots = [...globalState.slots];
-    const item = { ...newSlots[selectedIndex] };
-    newSlots[selectedIndex] = { state: "empty", type: null, content: null };
-    const nextFilledIndex = newSlots.findIndex((s, i) => i > selectedIndex && s.state === "filled");
-    if (nextFilledIndex !== -1) {
-      newSlots[nextFilledIndex] = { ...newSlots[nextFilledIndex], state: "selected" };
-    } else {
-      globalState.isPasteModeActive = false;
-      window.api?.setGlobalPasteMode?.(false);
-    }
-    globalState.slots = newSlots;
-    notify();
-    return item;
-  };
-  const clearSlot = (index) => {
-    if (globalState.slots[index].state === "filled") {
-      globalState.slots = [...globalState.slots];
-      globalState.slots[index] = { state: "empty", type: null, content: null };
-      notify();
-    }
-  };
-  const resetAll = () => {
-    globalState.slots = Array(globalState.slotCount).fill().map(() => ({ state: "empty", type: null, content: null }));
-    globalState.isCopyModeActive = false;
-    globalState.isPasteModeActive = false;
-    window.api?.stopClipboardListener?.();
-    window.api?.setGlobalPasteMode?.(false);
-    notify();
-  };
-  const setListeningSlot = (index) => {
-    if (!globalState.isCopyModeActive || globalState.slots[index].state !== "empty") return;
-    let newSlots = globalState.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s);
-    newSlots[index] = { ...newSlots[index], state: "listening" };
-    globalState.slots = newSlots;
-    notify();
-  };
-  const setSelectedSlot = (index) => {
-    if (!globalState.isPasteModeActive || globalState.slots[index].state !== "filled") return;
-    let newSlots = globalState.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s);
-    newSlots[index] = { ...newSlots[index], state: "selected" };
-    globalState.slots = newSlots;
-    notify();
   };
   function getSlotColorClass(state, design) {
     switch (state) {
@@ -223,43 +1444,50 @@
     );
   };
   const InlineClipboardUI = () => {
-    const { slots, isCopyModeActive, isPasteModeActive, autoHideDuration } = usePluginStore();
-    const [appState, setAppState] = react.useState(() => {
-      const store = window.useAppStore.getState();
-      return { orientation: store.orientation, design: store.design, edgePosition: store.edgePosition };
+    const slots = usePluginStore((state) => state.slots);
+    const isCopyModeActive = usePluginStore((state) => state.isCopyModeActive);
+    const isPasteModeActive = usePluginStore((state) => state.isPasteModeActive);
+    const autoHideDuration = usePluginStore((state) => state.autoHideDuration);
+    const { toggleCopyMode, togglePasteMode, resetAll, addClipboardItem, pasteNextItem, clearSlot, setListeningSlot, setSelectedSlot } = usePluginStore.getState();
+    const [appState, setAppState] = React.useState(() => {
+      const store = window.useAppStore?.getState() || {};
+      return { orientation: store.orientation || "horizontal", design: store.design || "style1", edgePosition: store.edgePosition || "top" };
     });
-    react.useEffect(() => {
+    React.useEffect(() => {
+      if (!window.useAppStore) return;
       return window.useAppStore.subscribe((state) => {
         setAppState({ orientation: state.orientation, design: state.design, edgePosition: state.edgePosition });
       });
     }, []);
     const { orientation, design, edgePosition } = appState;
-    const [activePreviewSlot, setActivePreviewSlot] = react.useState(null);
-    const [previewRect, setPreviewRect] = react.useState(null);
-    react.useEffect(() => {
+    const [activePreviewSlot, setActivePreviewSlot] = React.useState(null);
+    const referenceRef = React.useRef(null);
+    const floatingRef = React.useRef(null);
+    const [floatingStyle, setFloatingStyle] = React.useState({ top: -9999, left: -9999 });
+    React.useEffect(() => {
       let cleanupUpdate = null;
       if (window.api?.onClipboardUpdate) {
         cleanupUpdate = window.api.onClipboardUpdate((data) => {
-          addClipboardItem(data.type, data.content);
+          usePluginStore.getState().addClipboardItem(data.type, data.content);
         });
       }
       return () => {
         if (cleanupUpdate) cleanupUpdate();
       };
     }, []);
-    react.useEffect(() => {
+    React.useEffect(() => {
       let cleanupPaste = null;
       let lastPasteTime = 0;
       if (isPasteModeActive && window.api?.onRequestNextPaste) {
         cleanupPaste = window.api.onRequestNextPaste(() => {
           const now = Date.now();
-          if (now - lastPasteTime < 600) return;
+          if (now - lastPasteTime < 300) return;
           lastPasteTime = now;
-          const state = globalState;
+          const state = usePluginStore.getState();
           const targetSlot = state.slots.find((s) => s.state === "selected") || state.slots.find((s) => s.state === "filled");
           if (targetSlot && targetSlot.content && targetSlot.type) {
             window.api?.executeGlobalPaste({ type: targetSlot.type, content: targetSlot.content });
-            pasteNextItem();
+            state.pasteNextItem();
           }
         });
       }
@@ -267,12 +1495,11 @@
         if (cleanupPaste) cleanupPaste();
       };
     }, [isPasteModeActive]);
-    react.useEffect(() => {
+    React.useEffect(() => {
       const hasPasteable = slots.some((s) => s.state === "filled" || s.state === "selected");
       if (isPasteModeActive && !hasPasteable) {
         window.api?.setGlobalPasteMode?.(false);
-        globalState.isPasteModeActive = false;
-        notify();
+        usePluginStore.setState({ isPasteModeActive: false });
       }
     }, [isPasteModeActive, slots]);
     const handleSlotClick = (e, index, state) => {
@@ -280,9 +1507,9 @@
       if (!isCopyModeActive && (state === "filled" || state === "selected")) {
         if (activePreviewSlot === index) {
           setActivePreviewSlot(null);
-          setPreviewRect(null);
+          referenceRef.current = null;
         } else {
-          setPreviewRect(e.currentTarget.getBoundingClientRect());
+          referenceRef.current = e.currentTarget;
           setActivePreviewSlot(index);
         }
         if (isPasteModeActive) {
@@ -298,20 +1525,30 @@
         setListeningSlot(index);
       }
     };
-    react.useEffect(() => {
+    React.useEffect(() => {
+      if (activePreviewSlot !== null && referenceRef.current && floatingRef.current) {
+        computePosition(referenceRef.current, floatingRef.current, {
+          placement: orientation === "horizontal" ? edgePosition === "top" ? "bottom" : "top" : edgePosition === "left" ? "right" : "left",
+          middleware: [offset(12), flip(), shift({ padding: 8 })]
+        }).then(({ x, y }) => {
+          setFloatingStyle({ left: x, top: y });
+        });
+      }
+    }, [activePreviewSlot, orientation, edgePosition]);
+    React.useEffect(() => {
       if (activePreviewSlot !== null) {
         let timer = null;
         if (autoHideDuration > 0) {
           timer = setTimeout(() => {
             setActivePreviewSlot(null);
-            setPreviewRect(null);
+            referenceRef.current = null;
           }, autoHideDuration);
         }
         const handleOutsideClick = (e) => {
           const portal = document.getElementById("clipboard-preview-portal");
           if (portal && portal.contains(e.target)) return;
           setActivePreviewSlot(null);
-          setPreviewRect(null);
+          referenceRef.current = null;
         };
         document.addEventListener("mousedown", handleOutsideClick);
         return () => {
@@ -326,7 +1563,7 @@
       return content.substring(0, limit) + "...";
     };
     const renderPreviewPortal = () => {
-      if (activePreviewSlot === null || !previewRect) return null;
+      if (activePreviewSlot === null) return null;
       const slotData = slots[activePreviewSlot];
       if (!slotData?.content) return null;
       return reactDom.createPortal(
@@ -334,15 +1571,11 @@
           "div",
           {
             id: "clipboard-preview-portal",
+            ref: floatingRef,
             className: "fixed z-[999999] animate-in fade-in slide-in-from-top-1 duration-200 pointer-events-auto",
-            style: orientation === "horizontal" ? {
-              left: `${previewRect.left + previewRect.width / 2}px`,
-              transform: "translateX(-50%)",
-              ...edgePosition === "top" ? { top: `${previewRect.bottom + 12}px` } : { bottom: `${window.innerHeight - previewRect.top + 12}px` }
-            } : {
-              top: `${previewRect.top + previewRect.height / 2}px`,
-              transform: "translateY(-50%)",
-              ...edgePosition === "left" ? { left: `${previewRect.right + 12}px` } : { right: `${window.innerWidth - previewRect.left + 12}px` }
+            style: {
+              left: `${floatingStyle.left}px`,
+              top: `${floatingStyle.top}px`
             }
           },
           /* @__PURE__ */ window.React.createElement("div", { className: "bg-black/90 backdrop-blur-3xl text-white text-xs p-3 rounded-lg shadow-[0_25px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10 w-64 max-w-xs break-words flex flex-col gap-2" }, /* @__PURE__ */ window.React.createElement("div", { className: "flex justify-between items-center border-b border-white/10 pb-1" }, /* @__PURE__ */ window.React.createElement("span", { className: "font-bold text-slate-300" }, "Preview"), /* @__PURE__ */ window.React.createElement(
@@ -351,7 +1584,7 @@
               onClick: (e) => {
                 e.stopPropagation();
                 setActivePreviewSlot(null);
-                setPreviewRect(null);
+                referenceRef.current = null;
               },
               className: "text-slate-400 hover:text-white transition-colors cursor-pointer"
             },
@@ -403,7 +1636,9 @@
     ), renderPreviewPortal());
   };
   const SettingsPanelUI = () => {
-    const { slotCount, autoHideDuration } = usePluginStore();
+    const slotCount = usePluginStore((state) => state.slotCount);
+    const autoHideDuration = usePluginStore((state) => state.autoHideDuration);
+    const { setSlotCount, setAutoHideDuration } = usePluginStore.getState();
     return /* @__PURE__ */ window.React.createElement("div", { className: "flex flex-col gap-4 text-white" }, /* @__PURE__ */ window.React.createElement("h3", { className: "text-lg font-bold border-b border-white/10 pb-2" }, t("copyAndPaste"), " ", t("settings")), /* @__PURE__ */ window.React.createElement("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ window.React.createElement("label", { className: "text-sm text-slate-300" }, t("numberOfSlots")), /* @__PURE__ */ window.React.createElement(
       "input",
       {
@@ -430,19 +1665,19 @@
       /* @__PURE__ */ window.React.createElement("option", { value: 0 }, "Never Hide")
     )));
   };
-  if (window.KoBarExtensions.buttons) {
+  if (window.KoBarExtensions?.buttons) {
     window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter((b) => b.id !== "kobar-clipboard-manager-btn");
   }
-  if (window.KoBarExtensions.panels?.delete) {
+  if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete("kobar-clipboard-manager-panel");
   }
-  if (window.KoBarExtensions.registerInlineWidget) {
+  if (window.KoBarExtensions?.registerInlineWidget) {
     window.KoBarExtensions.registerInlineWidget("kobar-clipboard-manager-inline", {
       id: "kobar-clipboard-manager-inline",
       render: () => window.React.createElement(InlineClipboardUI)
     });
   }
-  if (window.KoBarExtensions.registerSettingsPanel) {
+  if (window.KoBarExtensions?.registerSettingsPanel) {
     window.KoBarExtensions.registerSettingsPanel("com.kobar.clipboardmanager", {
       id: "com.kobar.clipboardmanager",
       render: () => window.React.createElement(SettingsPanelUI)

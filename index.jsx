@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { create } from 'zustand';
+import { computePosition, flip, shift, offset } from '@floating-ui/dom';
 
 // --- Translations ---
 const TRANSLATIONS = {
@@ -16,213 +18,204 @@ const TRANSLATIONS = {
 };
 
 const t = (key) => {
-    const store = window.useAppStore.getState();
+    const store = window.useAppStore?.getState() || { language: 'en' };
     const lang = store.language || 'en';
     const dict = TRANSLATIONS[lang] || TRANSLATIONS['en'];
     return dict[key] || TRANSLATIONS['en'][key] || key;
 };
 
-// --- Custom Global State for Plugin ---
-let globalState = {
-    slots: Array(8).fill().map(() => ({ state: 'empty', type: null, content: null })),
-    slotCount: 8,
-    isCopyModeActive: false,
-    isPasteModeActive: false,
-    autoHideDuration: 5000,
-};
-
-// Read local storage settings
+// --- Zustand Store Initialization ---
+let initialSlotCount = 8;
+let initialAutoHideDuration = 5000;
 try {
     const saved = localStorage.getItem('kobar-plugin-clipboard-settings');
     if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.slotCount) {
-            globalState.slotCount = parsed.slotCount;
-            globalState.slots = Array(parsed.slotCount).fill().map(() => ({ state: 'empty', type: null, content: null }));
-        }
-        if (parsed.autoHideDuration !== undefined) {
-            globalState.autoHideDuration = parsed.autoHideDuration;
-        }
+        if (parsed.slotCount) initialSlotCount = parsed.slotCount;
+        if (parsed.autoHideDuration !== undefined) initialAutoHideDuration = parsed.autoHideDuration;
     }
 } catch(e){}
 
-let listeners = new Set();
-const notify = () => listeners.forEach(l => l());
+const usePluginStore = create((set, get) => ({
+    slots: Array(initialSlotCount).fill().map(() => ({ state: 'empty', type: null, content: null })),
+    slotCount: initialSlotCount,
+    isCopyModeActive: false,
+    isPasteModeActive: false,
+    autoHideDuration: initialAutoHideDuration,
 
-const usePluginStore = () => {
-    const [state, setState] = useState(globalState);
-    useEffect(() => {
-        const listener = () => setState({ ...globalState });
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-    }, []);
-    return state;
-};
-
-const setSlotCount = (count) => {
-    if (count > globalState.slots.length) {
-        const addedSlots = Array(count - globalState.slots.length).fill().map(() => ({ state: 'empty', type: null, content: null }));
-        globalState.slots = [...globalState.slots, ...addedSlots];
-    } else if (count < globalState.slots.length) {
-        globalState.slots = globalState.slots.slice(0, count);
-    }
-    globalState.slotCount = count;
-    localStorage.setItem('kobar-plugin-clipboard-settings', JSON.stringify({ 
-        slotCount: count,
-        autoHideDuration: globalState.autoHideDuration
-    }));
-    notify();
-};
-
-const setAutoHideDuration = (ms) => {
-    globalState.autoHideDuration = ms;
-    localStorage.setItem('kobar-plugin-clipboard-settings', JSON.stringify({ 
-        slotCount: globalState.slotCount, 
-        autoHideDuration: ms 
-    }));
-    notify();
-};
-
-const toggleCopyMode = () => {
-    if (globalState.isCopyModeActive) {
-        globalState.slots = globalState.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s);
-        globalState.isCopyModeActive = false;
-        window.api?.stopClipboardListener?.();
-    } else {
-        globalState.slots = globalState.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s);
-        const firstEmpty = globalState.slots.findIndex(s => s.state === 'empty');
-        if (firstEmpty !== -1) {
-            globalState.slots = [...globalState.slots];
-            globalState.slots[firstEmpty] = { ...globalState.slots[firstEmpty], state: 'listening' };
-            globalState.isCopyModeActive = true;
-            globalState.isPasteModeActive = false;
-            window.api?.startClipboardListener?.();
+    setSlotCount: (count) => set((state) => {
+        let newSlots = [...state.slots];
+        if (count > newSlots.length) {
+            const addedSlots = Array(count - newSlots.length).fill().map(() => ({ state: 'empty', type: null, content: null }));
+            newSlots = [...newSlots, ...addedSlots];
+        } else if (count < newSlots.length) {
+            newSlots = newSlots.slice(0, count);
         }
-    }
-    notify();
-};
+        localStorage.setItem('kobar-plugin-clipboard-settings', JSON.stringify({ 
+            slotCount: count,
+            autoHideDuration: state.autoHideDuration
+        }));
+        return { slotCount: count, slots: newSlots };
+    }),
 
-const togglePasteMode = () => {
-    if (globalState.isPasteModeActive) {
-        globalState.slots = globalState.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s);
-        globalState.isPasteModeActive = false;
-        window.api?.setGlobalPasteMode?.(false);
-    } else {
-        globalState.slots = globalState.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s);
-        const firstFilled = globalState.slots.findIndex(s => s.state === 'filled');
-        if (firstFilled !== -1) {
-            globalState.slots = [...globalState.slots];
-            globalState.slots[firstFilled] = { ...globalState.slots[firstFilled], state: 'selected' };
-            globalState.isPasteModeActive = true;
-            globalState.isCopyModeActive = false;
+    setAutoHideDuration: (ms) => set((state) => {
+        localStorage.setItem('kobar-plugin-clipboard-settings', JSON.stringify({ 
+            slotCount: state.slotCount, 
+            autoHideDuration: ms 
+        }));
+        return { autoHideDuration: ms };
+    }),
+
+    toggleCopyMode: () => set((state) => {
+        if (state.isCopyModeActive) {
             window.api?.stopClipboardListener?.();
-            window.api?.setGlobalPasteMode?.(true);
+            return {
+                isCopyModeActive: false,
+                slots: state.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s)
+            };
+        } else {
+            const firstEmpty = state.slots.findIndex(s => s.state === 'empty');
+            if (firstEmpty !== -1) {
+                window.api?.startClipboardListener?.();
+                const newSlots = [...state.slots];
+                newSlots[firstEmpty] = { ...newSlots[firstEmpty], state: 'listening' };
+                return {
+                    isCopyModeActive: true,
+                    isPasteModeActive: false,
+                    slots: newSlots
+                };
+            }
         }
-    }
-    notify();
-};
+        return state;
+    }),
 
-const addClipboardItem = (type, content) => {
-    if (!globalState.isCopyModeActive) return;
-    const listeningIndex = globalState.slots.findIndex(s => s.state === 'listening');
-    if (listeningIndex === -1) return;
+    togglePasteMode: () => set((state) => {
+        if (state.isPasteModeActive) {
+            window.api?.setGlobalPasteMode?.(false);
+            return {
+                isPasteModeActive: false,
+                slots: state.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s)
+            };
+        } else {
+            const firstFilled = state.slots.findIndex(s => s.state === 'filled');
+            if (firstFilled !== -1) {
+                window.api?.stopClipboardListener?.();
+                window.api?.setGlobalPasteMode?.(true);
+                const newSlots = state.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s);
+                newSlots[firstFilled] = { ...newSlots[firstFilled], state: 'selected' };
+                return {
+                    isPasteModeActive: true,
+                    isCopyModeActive: false,
+                    slots: newSlots
+                };
+            }
+        }
+        return state;
+    }),
 
-    let newSlots = [...globalState.slots];
-    newSlots[listeningIndex] = { state: 'filled', type, content };
+    addClipboardItem: (type, content) => set((state) => {
+        if (!state.isCopyModeActive) return state;
+        const listeningIndex = state.slots.findIndex(s => s.state === 'listening');
+        if (listeningIndex === -1) return state;
 
-    const nextEmptyIndex = newSlots.findIndex((s, i) => i > listeningIndex && s.state === 'empty');
-    if (nextEmptyIndex !== -1) {
-        newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: 'listening' };
-    } else {
-        globalState.isCopyModeActive = false;
+        let newSlots = [...state.slots];
+        newSlots[listeningIndex] = { state: 'filled', type, content };
+
+        const nextEmptyIndex = newSlots.findIndex((s, i) => i > listeningIndex && s.state === 'empty');
+        let isCopyModeActive = true;
+        if (nextEmptyIndex !== -1) {
+            newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: 'listening' };
+        } else {
+            isCopyModeActive = false;
+            window.api?.stopClipboardListener?.();
+        }
+        return { slots: newSlots, isCopyModeActive };
+    }),
+
+    pasteNextItem: () => set((state) => {
+        if (!state.isPasteModeActive) return state;
+        const selectedIndex = state.slots.findIndex(s => s.state === 'selected');
+        if (selectedIndex === -1) return state;
+
+        let newSlots = [...state.slots];
+        const item = { ...newSlots[selectedIndex] };
+        newSlots[selectedIndex] = { state: 'empty', type: null, content: null };
+
+        const nextFilledIndex = newSlots.findIndex((s, i) => i > selectedIndex && s.state === 'filled');
+        let isPasteModeActive = true;
+        if (nextFilledIndex !== -1) {
+            newSlots[nextFilledIndex] = { ...newSlots[nextFilledIndex], state: 'selected' };
+        } else {
+            isPasteModeActive = false;
+            window.api?.setGlobalPasteMode?.(false);
+        }
+        return { slots: newSlots, isPasteModeActive };
+    }),
+
+    clearSlot: (index) => set((state) => {
+        if (state.slots[index].state === 'filled') {
+            const newSlots = [...state.slots];
+            newSlots[index] = { state: 'empty', type: null, content: null };
+            return { slots: newSlots };
+        }
+        return state;
+    }),
+
+    resetAll: () => set((state) => {
         window.api?.stopClipboardListener?.();
-    }
-    globalState.slots = newSlots;
-    notify();
-};
+        window.api?.setGlobalPasteMode?.(false);
+        return {
+            slots: Array(state.slotCount).fill().map(() => ({ state: 'empty', type: null, content: null })),
+            isCopyModeActive: false,
+            isPasteModeActive: false
+        };
+    }),
 
-window.KoBarClipboardAPI = {
-    forceAddClipboardItem: (type, content) => {
-        let newSlots = [...globalState.slots];
+    setListeningSlot: (index) => set((state) => {
+        if (!state.isCopyModeActive || state.slots[index].state !== 'empty') return state;
+        let newSlots = state.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s);
+        newSlots[index] = { ...newSlots[index], state: 'listening' };
+        return { slots: newSlots };
+    }),
+
+    setSelectedSlot: (index) => set((state) => {
+        if (!state.isPasteModeActive || state.slots[index].state !== 'filled') return state;
+        let newSlots = state.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s);
+        newSlots[index] = { ...newSlots[index], state: 'selected' };
+        return { slots: newSlots };
+    }),
+
+    forceAddClipboardItem: (type, content) => set((state) => {
+        let newSlots = [...state.slots];
         const listeningIndex = newSlots.findIndex(s => s.state === 'listening');
         const targetIndex = listeningIndex !== -1 ? listeningIndex : newSlots.findIndex(s => s.state === 'empty');
         
+        let isCopyModeActive = state.isCopyModeActive;
+
         if (targetIndex !== -1) {
             newSlots[targetIndex] = { state: 'filled', type, content };
-            if (globalState.isCopyModeActive && listeningIndex !== -1) {
+            if (isCopyModeActive && listeningIndex !== -1) {
                 const nextEmptyIndex = newSlots.findIndex((s, i) => i > targetIndex && s.state === 'empty');
                 if (nextEmptyIndex !== -1) {
                     newSlots[nextEmptyIndex] = { ...newSlots[nextEmptyIndex], state: 'listening' };
                 } else {
-                    globalState.isCopyModeActive = false;
+                    isCopyModeActive = false;
                     window.api?.stopClipboardListener?.();
                 }
             }
         } else {
-            // FIFO: Drop the first slot and add to the end
             newSlots.shift();
             newSlots.push({ state: 'filled', type, content });
         }
-        globalState.slots = newSlots;
-        notify();
+        return { slots: newSlots, isCopyModeActive };
+    })
+}));
+
+window.KoBarClipboardAPI = {
+    forceAddClipboardItem: (type, content) => {
+        usePluginStore.getState().forceAddClipboardItem(type, content);
     }
 };
-
-const pasteNextItem = () => {
-    if (!globalState.isPasteModeActive) return;
-    const selectedIndex = globalState.slots.findIndex(s => s.state === 'selected');
-    if (selectedIndex === -1) return;
-
-    let newSlots = [...globalState.slots];
-    const item = { ...newSlots[selectedIndex] };
-    newSlots[selectedIndex] = { state: 'empty', type: null, content: null };
-
-    const nextFilledIndex = newSlots.findIndex((s, i) => i > selectedIndex && s.state === 'filled');
-    if (nextFilledIndex !== -1) {
-        newSlots[nextFilledIndex] = { ...newSlots[nextFilledIndex], state: 'selected' };
-    } else {
-        globalState.isPasteModeActive = false;
-        window.api?.setGlobalPasteMode?.(false);
-    }
-    globalState.slots = newSlots;
-    notify();
-    return item;
-};
-
-const clearSlot = (index) => {
-    if (globalState.slots[index].state === 'filled') {
-        globalState.slots = [...globalState.slots];
-        globalState.slots[index] = { state: 'empty', type: null, content: null };
-        notify();
-    }
-};
-
-const resetAll = () => {
-    globalState.slots = Array(globalState.slotCount).fill().map(() => ({ state: 'empty', type: null, content: null }));
-    globalState.isCopyModeActive = false;
-    globalState.isPasteModeActive = false;
-    window.api?.stopClipboardListener?.();
-    window.api?.setGlobalPasteMode?.(false);
-    notify();
-};
-
-const setListeningSlot = (index) => {
-    if (!globalState.isCopyModeActive || globalState.slots[index].state !== 'empty') return;
-    let newSlots = globalState.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s);
-    newSlots[index] = { ...newSlots[index], state: 'listening' };
-    globalState.slots = newSlots;
-    notify();
-};
-
-const setSelectedSlot = (index) => {
-    if (!globalState.isPasteModeActive || globalState.slots[index].state !== 'filled') return;
-    let newSlots = globalState.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s);
-    newSlots[index] = { ...newSlots[index], state: 'selected' };
-    globalState.slots = newSlots;
-    notify();
-};
-
-// IPC initialization moved inside the component to support hot-reload cleanups
 
 // --- UI Components ---
 function getSlotColorClass(state, design) {
@@ -249,15 +242,22 @@ const TooltipButton = ({ onClick, onDoubleClick, className, label, children }) =
 };
 
 const InlineClipboardUI = () => {
-    const { slots, isCopyModeActive, isPasteModeActive, autoHideDuration } = usePluginStore();
+    const slots = usePluginStore(state => state.slots);
+    const isCopyModeActive = usePluginStore(state => state.isCopyModeActive);
+    const isPasteModeActive = usePluginStore(state => state.isPasteModeActive);
+    const autoHideDuration = usePluginStore(state => state.autoHideDuration);
     
+    // Actions
+    const { toggleCopyMode, togglePasteMode, resetAll, addClipboardItem, pasteNextItem, clearSlot, setListeningSlot, setSelectedSlot } = usePluginStore.getState();
+
     // Subscribe to KoBar app store natively
     const [appState, setAppState] = useState(() => {
-        const store = window.useAppStore.getState();
-        return { orientation: store.orientation, design: store.design, edgePosition: store.edgePosition };
+        const store = window.useAppStore?.getState() || {};
+        return { orientation: store.orientation || 'horizontal', design: store.design || 'style1', edgePosition: store.edgePosition || 'top' };
     });
 
     useEffect(() => {
+        if (!window.useAppStore) return;
         return window.useAppStore.subscribe((state) => {
             setAppState({ orientation: state.orientation, design: state.design, edgePosition: state.edgePosition });
         });
@@ -266,7 +266,9 @@ const InlineClipboardUI = () => {
     const { orientation, design, edgePosition } = appState;
 
     const [activePreviewSlot, setActivePreviewSlot] = useState(null);
-    const [previewRect, setPreviewRect] = useState(null);
+    const referenceRef = useRef(null);
+    const floatingRef = useRef(null);
+    const [floatingStyle, setFloatingStyle] = useState({ top: -9999, left: -9999 });
 
     // Register IPC Listeners
     useEffect(() => {
@@ -275,7 +277,7 @@ const InlineClipboardUI = () => {
 
         if (window.api?.onClipboardUpdate) {
             cleanupUpdate = window.api.onClipboardUpdate((data) => {
-                addClipboardItem(data.type, data.content);
+                usePluginStore.getState().addClipboardItem(data.type, data.content);
             });
         }
         
@@ -293,14 +295,14 @@ const InlineClipboardUI = () => {
         if (isPasteModeActive && window.api?.onRequestNextPaste) {
             cleanupPaste = window.api.onRequestNextPaste(() => {
                 const now = Date.now();
-                if (now - lastPasteTime < 600) return; // Prevent double trigger within 600ms
+                if (now - lastPasteTime < 300) return; // Prevent double trigger within 300ms
                 lastPasteTime = now;
 
-                const state = globalState; // Read fresh from global
+                const state = usePluginStore.getState(); // Read fresh from global
                 const targetSlot = state.slots.find(s => s.state === 'selected') || state.slots.find(s => s.state === 'filled');
                 if (targetSlot && targetSlot.content && targetSlot.type) {
                     window.api?.executeGlobalPaste({ type: targetSlot.type, content: targetSlot.content });
-                    pasteNextItem();
+                    state.pasteNextItem();
                 }
             });
         }
@@ -313,9 +315,7 @@ const InlineClipboardUI = () => {
         const hasPasteable = slots.some(s => s.state === 'filled' || s.state === 'selected');
         if (isPasteModeActive && !hasPasteable) {
             window.api?.setGlobalPasteMode?.(false);
-            // Also update global state
-            globalState.isPasteModeActive = false;
-            notify();
+            usePluginStore.setState({ isPasteModeActive: false });
         }
     }, [isPasteModeActive, slots]);
 
@@ -324,9 +324,9 @@ const InlineClipboardUI = () => {
         if (!isCopyModeActive && (state === 'filled' || state === 'selected')) {
             if (activePreviewSlot === index) {
                 setActivePreviewSlot(null);
-                setPreviewRect(null);
+                referenceRef.current = null;
             } else {
-                setPreviewRect(e.currentTarget.getBoundingClientRect());
+                referenceRef.current = e.currentTarget;
                 setActivePreviewSlot(index);
             }
             if (isPasteModeActive) {
@@ -343,6 +343,18 @@ const InlineClipboardUI = () => {
         }
     };
 
+    // Mathematical Positioning using Floating UI
+    useEffect(() => {
+        if (activePreviewSlot !== null && referenceRef.current && floatingRef.current) {
+            computePosition(referenceRef.current, floatingRef.current, {
+                placement: orientation === 'horizontal' ? (edgePosition === 'top' ? 'bottom' : 'top') : (edgePosition === 'left' ? 'right' : 'left'),
+                middleware: [offset(12), flip(), shift({ padding: 8 })]
+            }).then(({ x, y }) => {
+                setFloatingStyle({ left: x, top: y });
+            });
+        }
+    }, [activePreviewSlot, orientation, edgePosition]);
+
     // Close preview on outside click
     useEffect(() => {
         if (activePreviewSlot !== null) {
@@ -350,7 +362,7 @@ const InlineClipboardUI = () => {
             if (autoHideDuration > 0) {
                 timer = setTimeout(() => {
                     setActivePreviewSlot(null);
-                    setPreviewRect(null);
+                    referenceRef.current = null;
                 }, autoHideDuration);
             }
             
@@ -358,7 +370,7 @@ const InlineClipboardUI = () => {
                 const portal = document.getElementById('clipboard-preview-portal');
                 if (portal && portal.contains(e.target)) return;
                 setActivePreviewSlot(null);
-                setPreviewRect(null);
+                referenceRef.current = null;
             };
             document.addEventListener('mousedown', handleOutsideClick);
             return () => {
@@ -376,30 +388,19 @@ const InlineClipboardUI = () => {
 
     // Portal logic for preview
     const renderPreviewPortal = () => {
-        if (activePreviewSlot === null || !previewRect) return null;
+        if (activePreviewSlot === null) return null;
         const slotData = slots[activePreviewSlot];
         if (!slotData?.content) return null;
 
         return createPortal(
             <div 
                 id="clipboard-preview-portal"
+                ref={floatingRef}
                 className="fixed z-[999999] animate-in fade-in slide-in-from-top-1 duration-200 pointer-events-auto"
-                style={orientation === 'horizontal'
-                    ? {
-                        left: `${previewRect.left + previewRect.width / 2}px`,
-                        transform: 'translateX(-50%)',
-                        ...(edgePosition === 'top'
-                            ? { top: `${previewRect.bottom + 12}px` }
-                            : { bottom: `${window.innerHeight - previewRect.top + 12}px` })
-                    }
-                    : {
-                        top: `${previewRect.top + previewRect.height / 2}px`,
-                        transform: 'translateY(-50%)',
-                        ...(edgePosition === 'left' 
-                            ? { left: `${previewRect.right + 12}px` } 
-                            : { right: `${window.innerWidth - previewRect.left + 12}px` })
-                    }
-                }
+                style={{
+                    left: `${floatingStyle.left}px`,
+                    top: `${floatingStyle.top}px`
+                }}
             >
                 <div className="bg-black/90 backdrop-blur-3xl text-white text-xs p-3 rounded-lg shadow-[0_25px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10 w-64 max-w-xs break-words flex flex-col gap-2">
                     <div className="flex justify-between items-center border-b border-white/10 pb-1">
@@ -408,7 +409,7 @@ const InlineClipboardUI = () => {
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setActivePreviewSlot(null);
-                                setPreviewRect(null);
+                                referenceRef.current = null;
                             }}
                             className="text-slate-400 hover:text-white transition-colors cursor-pointer"
                         >
@@ -480,7 +481,10 @@ const InlineClipboardUI = () => {
 };
 
 const SettingsPanelUI = () => {
-    const { slotCount, autoHideDuration } = usePluginStore();
+    const slotCount = usePluginStore(state => state.slotCount);
+    const autoHideDuration = usePluginStore(state => state.autoHideDuration);
+    const { setSlotCount, setAutoHideDuration } = usePluginStore.getState();
+
     return (
         <div className="flex flex-col gap-4 text-white">
             <h3 className="text-lg font-bold border-b border-white/10 pb-2">{t('copyAndPaste')} {t('settings')}</h3>
@@ -523,24 +527,21 @@ const SettingsPanelUI = () => {
 
 // --- Plugin Registration ---
 
-// Remove old button/panel if hot-reloading
-if (window.KoBarExtensions.buttons) {
+if (window.KoBarExtensions?.buttons) {
     window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter(b => b.id !== 'kobar-clipboard-manager-btn');
 }
-if (window.KoBarExtensions.panels?.delete) {
+if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete('kobar-clipboard-manager-panel');
 }
 
-// Register the Inline Widget instead of a sidebar button
-if (window.KoBarExtensions.registerInlineWidget) {
+if (window.KoBarExtensions?.registerInlineWidget) {
     window.KoBarExtensions.registerInlineWidget('kobar-clipboard-manager-inline', {
         id: 'kobar-clipboard-manager-inline',
         render: () => window.React.createElement(InlineClipboardUI)
     });
 }
 
-// Register Settings Panel
-if (window.KoBarExtensions.registerSettingsPanel) {
+if (window.KoBarExtensions?.registerSettingsPanel) {
     window.KoBarExtensions.registerSettingsPanel('com.kobar.clipboardmanager', {
         id: 'com.kobar.clipboardmanager',
         render: () => window.React.createElement(SettingsPanelUI)
