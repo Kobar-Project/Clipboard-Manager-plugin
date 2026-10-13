@@ -1,7 +1,7 @@
 {
   "id": "com.kobar.clipboardmanager",
   "name": "Clipboard Manager",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Sequential multi-slot clipboard manager for KoBar. Stores your copied items in visual slots and pastes them in order.",
   "author": "KoBar",
   "entry": "index.js",
@@ -24,7 +24,7 @@
     "zh",
     "hi"
   ],
-  "versionNote": "Updated plugin images.",
+  "versionNote": "Bar icon: no round fill behind the icon, same colour and weight as other bar icons.",
   "image": "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/clipboardmanager.png",
   "storeImage": [
     "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/Clipboard-Manager1.png",

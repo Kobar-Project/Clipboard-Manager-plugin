@@ -210,7 +210,7 @@
         return "radio-grey";
     }
   }
-  const TooltipButton = ({ onClick, onDoubleClick, className, label, children }) => {
+  const TooltipButton = ({ onClick, onDoubleClick, className, style, label, children }) => {
     return /* @__PURE__ */ window.React.createElement(
       "button",
       {
@@ -366,10 +366,11 @@
       {
         onClick: toggleCopyMode,
         onDoubleClick: resetAll,
-        className: `w-12 h-12 rounded-full flex items-center justify-center transition-all ${isCopyModeActive ? "bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]" : "bg-white/5 text-slate-400 hover:text-[var(--theme-primary)] hover:bg-white/10 shadow-lg"}`,
+        className: "flex items-center justify-center rounded-md transition-colors text-slate-400 hover:text-white hover:bg-white/10",
+        style: { width: "var(--kb-bar-item, 36px)", height: "var(--kb-bar-item, 36px)" },
         label: isCopyModeActive ? t("stopCopyMode") : t("startCopyMode")
       },
-      /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined text-[24px]" }, "content_copy")
+      /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "var(--kb-bar-icon, 20px)" } }, "content_copy")
     ), /* @__PURE__ */ window.React.createElement("div", { className: `flex flex-wrap justify-center content-center ${orientation === "horizontal" ? "gap-1.5 h-full max-h-[80px]" : "gap-2 w-full max-w-full px-1"} relative`, onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => /* @__PURE__ */ window.React.createElement(
       "label",
       {
@@ -396,10 +397,11 @@
       {
         onClick: togglePasteMode,
         onDoubleClick: resetAll,
-        className: `w-12 h-12 rounded-full flex items-center justify-center transition-all ${isPasteModeActive ? "bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.3)]" : "bg-white/5 text-slate-400 hover:text-[var(--theme-primary)] hover:bg-white/10 shadow-lg"}`,
+        className: "flex items-center justify-center rounded-md transition-colors text-slate-400 hover:text-white hover:bg-white/10",
+        style: { width: "var(--kb-bar-item, 36px)", height: "var(--kb-bar-item, 36px)" },
         label: isPasteModeActive ? t("stopPasteMode") : t("startPasteMode")
       },
-      /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined text-[24px]" }, "content_paste")
+      /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "var(--kb-bar-icon, 20px)" } }, "content_paste")
     ), renderPreviewPortal());
   };
   const SettingsPanelUI = () => {
