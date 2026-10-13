@@ -235,6 +235,16 @@ function getSlotColorClass(state, design) {
     }
 }
 
+function getSlotDotStyle(state) {
+    const base = { display: 'block', boxSizing: 'border-box', width: 12, height: 12, borderRadius: '50%', borderStyle: 'solid', borderWidth: 2, transition: 'all 0.2s ease-in-out' };
+    switch (state) {
+        case 'listening': return { ...base, borderColor: '#3b82f6', background: 'rgba(59,130,246,0.45)' };
+        case 'filled': return { ...base, borderColor: '#22c55e', background: '#22c55e' };
+        case 'selected': return { ...base, borderColor: '#22c55e', background: '#22c55e', boxShadow: '0 0 0 2px var(--theme-primary, #3b82f6)' };
+        default: return { ...base, borderColor: '#4b5563', background: 'transparent' };
+    }
+}
+
 const TooltipButton = ({ onClick, onDoubleClick, className, style, label, children }) => {
     return (
         <button 
@@ -254,16 +264,25 @@ const InlineClipboardUI = () => {
     // Subscribe to KoBar app store natively
     const [appState, setAppState] = useState(() => {
         const store = window.useAppStore.getState();
-        return { orientation: store.orientation, design: store.design, edgePosition: store.edgePosition };
+        return { orientation: store.orientation, design: store.design, edgePosition: store.edgePosition, sidebarWidth: store.sidebarWidth };
     });
 
     useEffect(() => {
         return window.useAppStore.subscribe((state) => {
-            setAppState({ orientation: state.orientation, design: state.design, edgePosition: state.edgePosition });
+            setAppState((prev) => (prev.orientation === state.orientation && prev.design === state.design && prev.edgePosition === state.edgePosition && prev.sidebarWidth === state.sidebarWidth) ? prev : { orientation: state.orientation, design: state.design, edgePosition: state.edgePosition, sidebarWidth: state.sidebarWidth });
         });
     }, []);
 
-    const { orientation, design, edgePosition } = appState;
+    const { orientation, design, edgePosition, sidebarWidth } = appState;
+
+    // R-13P: slots form a grid sized to the bar thickness (columns in a vertical bar, rows in a horizontal one).
+    const SLOT_CELL = 16;
+    const SLOT_GAP = 6;
+    const BAR_PADDING = 8;
+    const lanes = Math.max(1, Math.floor(((Number(sidebarWidth) || 56) - BAR_PADDING + SLOT_GAP) / (SLOT_CELL + SLOT_GAP)));
+    const gridStyle = orientation === 'horizontal'
+        ? { display: 'grid', gridTemplateRows: `repeat(${Math.min(lanes, slots.length)}, ${SLOT_CELL}px)`, gridAutoFlow: 'column', gridAutoColumns: `${SLOT_CELL}px`, gap: `${SLOT_GAP}px` }
+        : { display: 'grid', gridTemplateColumns: `repeat(${Math.min(lanes, slots.length)}, ${SLOT_CELL}px)`, gridAutoRows: `${SLOT_CELL}px`, gap: `${SLOT_GAP}px`, justifyContent: 'center' };
 
     const [activePreviewSlot, setActivePreviewSlot] = useState(null);
     const [previewRect, setPreviewRect] = useState(null);
@@ -438,23 +457,25 @@ const InlineClipboardUI = () => {
             </TooltipButton>
 
             {/* Slots Grid */}
-            <div className={`flex flex-wrap justify-center content-center ${orientation === 'horizontal' ? 'gap-1.5 h-full max-h-[80px]' : 'gap-2 w-full max-w-full px-1'} relative`} onClick={e => e.stopPropagation()}>
-                {slots.map((slot, index) => (
-                    <label
-                        key={index}
-                        title={slot.content ? (slot.type === 'image' ? t('imagePreview') : truncateContent(slot.content, 100)) : t('emptySlotTip')}
-                        className={`relative flex items-center justify-center cursor-pointer transition-transform ${activePreviewSlot === index ? 'scale-125 z-10' : 'hover:scale-110'} ${!isCopyModeActive && !isPasteModeActive && slot.state === 'empty' ? 'opacity-50' : 'opacity-100'}`}
-                        onClick={(e) => handleSlotClick(e, index, slot.state)}
-                        onDoubleClick={(e) => { e.preventDefault(); clearSlot(index); }}
-                    >
-                        <input
-                            readOnly
-                            checked={slot.state !== 'empty'}
-                            className={`custom-radio ${getSlotColorClass(slot.state, design)} pointer-events-none`}
-                            type="radio"
-                        />
-                    </label>
-                ))}
+            <div style={gridStyle} className="relative" onClick={e => e.stopPropagation()}>
+                {slots.map((slot, index) => {
+                    // Inline styles on purpose: state must stay visible regardless of host CSS (bar-widget normalisation).
+                    const dot = getSlotDotStyle(slot.state);
+                    return (
+                        <span
+                            key={index}
+                            role="radio"
+                            aria-checked={slot.state !== 'empty'}
+                            title={slot.content ? (slot.type === 'image' ? t('imagePreview') : truncateContent(slot.content, 100)) : t('emptySlotTip')}
+                            className={`relative flex items-center justify-center cursor-pointer transition-transform ${activePreviewSlot === index ? 'scale-125 z-10' : 'hover:scale-110'}`}
+                            style={{ width: SLOT_CELL, height: SLOT_CELL, opacity: !isCopyModeActive && !isPasteModeActive && slot.state === 'empty' ? 0.5 : 1 }}
+                            onClick={(e) => handleSlotClick(e, index, slot.state)}
+                            onDoubleClick={(e) => { e.preventDefault(); clearSlot(index); }}
+                        >
+                            <span style={dot} />
+                        </span>
+                    );
+                })}
             </div>
 
             {/* Paste Button */}
