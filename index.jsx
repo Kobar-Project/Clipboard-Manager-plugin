@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { computeBubblePosition } from './bubblePosition.js';
 
 // --- Translations ---
 const TRANSLATIONS = {
@@ -353,6 +354,29 @@ const InlineClipboardUI = () => {
 
     const [activePreviewSlot, setActivePreviewSlot] = useState(null);
     const [previewRect, setPreviewRect] = useState(null);
+    const bubbleRef = useRef(null);
+    const [bubblePos, setBubblePos] = useState(null);
+
+    // Edge-aware placement: measure, flip, clamp; recompute on resize and size changes.
+    useLayoutEffect(() => {
+        const el = bubbleRef.current;
+        if (activePreviewSlot === null || !previewRect || !el) { setBubblePos(null); return undefined; }
+        const place = () => {
+            const box = el.firstElementChild || el;
+            const pos = computeBubblePosition({
+                anchor: previewRect,
+                size: { width: box.offsetWidth, height: box.offsetHeight },
+                viewport: { width: window.innerWidth, height: window.innerHeight },
+                orientation, edgePosition, margin: 8, gap: 12
+            });
+            setBubblePos((prev) => (prev && prev.left === pos.left && prev.top === pos.top && prev.maxWidth === pos.maxWidth && prev.maxHeight === pos.maxHeight ? prev : pos));
+        };
+        place();
+        window.addEventListener('resize', place);
+        let ro = null;
+        if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(place); ro.observe(el.firstElementChild || el); }
+        return () => { window.removeEventListener('resize', place); if (ro) ro.disconnect(); };
+    }, [activePreviewSlot, previewRect, orientation, edgePosition, slots]);
 
     // Register IPC Listeners
     useEffect(() => {
@@ -484,24 +508,12 @@ const InlineClipboardUI = () => {
             <div 
                 id="clipboard-preview-portal"
                 className="fixed z-[999999] animate-in fade-in slide-in-from-top-1 duration-200 pointer-events-auto"
-                style={orientation === 'horizontal'
-                    ? {
-                        left: `${previewRect.left + previewRect.width / 2}px`,
-                        transform: 'translateX(-50%)',
-                        ...(edgePosition === 'top'
-                            ? { top: `${previewRect.bottom + 12}px` }
-                            : { bottom: `${window.innerHeight - previewRect.top + 12}px` })
-                    }
-                    : {
-                        top: `${previewRect.top + previewRect.height / 2}px`,
-                        transform: 'translateY(-50%)',
-                        ...(edgePosition === 'left' 
-                            ? { left: `${previewRect.right + 12}px` } 
-                            : { right: `${window.innerWidth - previewRect.left + 12}px` })
-                    }
-                }
+                ref={bubbleRef}
+                style={bubblePos
+                    ? { left: `${bubblePos.left}px`, top: `${bubblePos.top}px`, maxWidth: `${bubblePos.maxWidth}px`, maxHeight: `${bubblePos.maxHeight}px`, display: 'flex' }
+                    : { left: '0px', top: '0px', visibility: 'hidden' }}
             >
-                <div className="bg-black/90 backdrop-blur-3xl text-white text-xs p-3 rounded-lg shadow-[0_25px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10 w-64 max-w-xs break-words flex flex-col gap-2">
+                <div className="bg-black/90 backdrop-blur-3xl text-white text-xs p-3 rounded-lg shadow-[0_25px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10 w-64 max-w-xs break-words flex flex-col gap-2 min-h-0 overflow-hidden" style={{ maxHeight: bubblePos ? `${bubblePos.maxHeight}px` : undefined }}>
                     <div className="flex justify-between items-center border-b border-white/10 pb-1">
                         <span className="font-bold text-slate-300">Preview</span>
                         <button 
@@ -515,7 +527,7 @@ const InlineClipboardUI = () => {
                             <span className="material-symbols-outlined text-[16px]">close</span>
                         </button>
                     </div>
-                    <div className="overflow-y-auto max-h-32 custom-scrollbar pr-1 select-text">
+                    <div className="overflow-y-auto max-h-32 min-h-0 custom-scrollbar pr-1 select-text">
                         {slotData.type === 'image' ? <span className="italic opacity-50">{t('imagePreview')}</span> : truncateContent(slotData.content, 500)}
                     </div>
                 </div>

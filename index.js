@@ -1,5 +1,49 @@
 (function(react, reactDom) {
   "use strict";
+  function computeBubblePosition(opts) {
+    var anchor = opts.anchor;
+    var viewport = opts.viewport;
+    var margin = opts.margin;
+    var gap = opts.gap;
+    var horizontalBar = opts.orientation === "horizontal";
+    var edge = opts.edgePosition;
+    var availW = Math.max(0, viewport.width - 2 * margin);
+    var availH = Math.max(0, viewport.height - 2 * margin);
+    var width = Math.min(opts.size.width, availW);
+    var height = Math.min(opts.size.height, availH);
+    var preferred, opposite;
+    if (horizontalBar) {
+      preferred = edge === "top" ? "bottom" : "top";
+    } else {
+      preferred = edge === "left" ? "right" : "left";
+    }
+    opposite = { top: "bottom", bottom: "top", left: "right", right: "left" }[preferred];
+    function room(side2) {
+      if (side2 === "bottom") return viewport.height - margin - (anchor.bottom + gap);
+      if (side2 === "top") return anchor.top - gap - margin;
+      if (side2 === "right") return viewport.width - margin - (anchor.right + gap);
+      return anchor.left - gap - margin;
+    }
+    var main = horizontalBar ? height : width;
+    var side = preferred;
+    if (room(preferred) < main) {
+      if (room(opposite) >= main || room(opposite) > room(preferred)) side = opposite;
+    }
+    var space = Math.max(0, room(side));
+    if (horizontalBar && height > space) height = space;
+    if (!horizontalBar && width > space) width = space;
+    var left, top;
+    if (horizontalBar) {
+      top = side === "bottom" ? anchor.bottom + gap : anchor.top - gap - height;
+      left = (anchor.left + anchor.right) / 2 - width / 2;
+    } else {
+      left = side === "right" ? anchor.right + gap : anchor.left - gap - width;
+      top = (anchor.top + anchor.bottom) / 2 - height / 2;
+    }
+    left = Math.min(Math.max(left, margin), Math.max(margin, viewport.width - margin - width));
+    top = Math.min(Math.max(top, margin), Math.max(margin, viewport.height - margin - height));
+    return { left, top, maxWidth: availW, maxHeight: horizontalBar ? Math.max(space, 0) : availH, side };
+  }
   const TRANSLATIONS = {
     en: { copy: "Copy", paste: "Paste", numberOfSlots: "Number of Clipboard Slots", slotsMinMaxInfo: "Min: 4, Max: 20 slots.", emptySlotTip: "Copy items to fill slots", stopCopyMode: "Stop Copy Mode", startCopyMode: "Start Copy Mode", stopPasteMode: "Stop Paste Mode", startPasteMode: "Start Paste Mode", autoAddClipboard: "Auto-add to Clipboard", autoAddClipboardDesc: "Automatically send picked colors to the Sequential Clipboard slots.", imagePreview: "Image Content", copyAndPaste: "Copy & Paste", settings: "Settings" },
     tr: { copy: "Kopyala", paste: "Yapıştır", numberOfSlots: "Pano Slot Sayısı", slotsMinMaxInfo: "Min: 4, Maks: 20 slot.", emptySlotTip: "Slotları doldurmak için kopyalama yapın", stopCopyMode: "Kopyalama Modunu Durdur", startCopyMode: "Kopyalama Modunu Başlat", stopPasteMode: "Yapıştırma Modunu Durdur", startPasteMode: "Yapıştırma Modunu Başlat", autoAddClipboard: "Panoya Otomatik Ekle", autoAddClipboardDesc: "Seçilen renkleri otomatik olarak Sıralı Pano yuvalarına gönderir.", imagePreview: "Resim İçeriği", copyAndPaste: "Kopyala ve Yapıştır", settings: "Ayarlar" },
@@ -295,6 +339,39 @@
     const grid = slotGridGeometry(appState, slots.length);
     const [activePreviewSlot, setActivePreviewSlot] = react.useState(null);
     const [previewRect, setPreviewRect] = react.useState(null);
+    const bubbleRef = react.useRef(null);
+    const [bubblePos, setBubblePos] = react.useState(null);
+    react.useLayoutEffect(() => {
+      const el = bubbleRef.current;
+      if (activePreviewSlot === null || !previewRect || !el) {
+        setBubblePos(null);
+        return void 0;
+      }
+      const place = () => {
+        const box = el.firstElementChild || el;
+        const pos = computeBubblePosition({
+          anchor: previewRect,
+          size: { width: box.offsetWidth, height: box.offsetHeight },
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          orientation,
+          edgePosition,
+          margin: 8,
+          gap: 12
+        });
+        setBubblePos((prev) => prev && prev.left === pos.left && prev.top === pos.top && prev.maxWidth === pos.maxWidth && prev.maxHeight === pos.maxHeight ? prev : pos);
+      };
+      place();
+      window.addEventListener("resize", place);
+      let ro = null;
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(place);
+        ro.observe(el.firstElementChild || el);
+      }
+      return () => {
+        window.removeEventListener("resize", place);
+        if (ro) ro.disconnect();
+      };
+    }, [activePreviewSlot, previewRect, orientation, edgePosition, slots]);
     react.useEffect(() => {
       let cleanupUpdate = null;
       if (window.api?.onClipboardUpdate) {
@@ -404,17 +481,10 @@
           {
             id: "clipboard-preview-portal",
             className: "fixed z-[999999] animate-in fade-in slide-in-from-top-1 duration-200 pointer-events-auto",
-            style: orientation === "horizontal" ? {
-              left: `${previewRect.left + previewRect.width / 2}px`,
-              transform: "translateX(-50%)",
-              ...edgePosition === "top" ? { top: `${previewRect.bottom + 12}px` } : { bottom: `${window.innerHeight - previewRect.top + 12}px` }
-            } : {
-              top: `${previewRect.top + previewRect.height / 2}px`,
-              transform: "translateY(-50%)",
-              ...edgePosition === "left" ? { left: `${previewRect.right + 12}px` } : { right: `${window.innerWidth - previewRect.left + 12}px` }
-            }
+            ref: bubbleRef,
+            style: bubblePos ? { left: `${bubblePos.left}px`, top: `${bubblePos.top}px`, maxWidth: `${bubblePos.maxWidth}px`, maxHeight: `${bubblePos.maxHeight}px`, display: "flex" } : { left: "0px", top: "0px", visibility: "hidden" }
           },
-          /* @__PURE__ */ window.React.createElement("div", { className: "bg-black/90 backdrop-blur-3xl text-white text-xs p-3 rounded-lg shadow-[0_25px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10 w-64 max-w-xs break-words flex flex-col gap-2" }, /* @__PURE__ */ window.React.createElement("div", { className: "flex justify-between items-center border-b border-white/10 pb-1" }, /* @__PURE__ */ window.React.createElement("span", { className: "font-bold text-slate-300" }, "Preview"), /* @__PURE__ */ window.React.createElement(
+          /* @__PURE__ */ window.React.createElement("div", { className: "bg-black/90 backdrop-blur-3xl text-white text-xs p-3 rounded-lg shadow-[0_25px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/10 w-64 max-w-xs break-words flex flex-col gap-2 min-h-0 overflow-hidden", style: { maxHeight: bubblePos ? `${bubblePos.maxHeight}px` : void 0 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex justify-between items-center border-b border-white/10 pb-1" }, /* @__PURE__ */ window.React.createElement("span", { className: "font-bold text-slate-300" }, "Preview"), /* @__PURE__ */ window.React.createElement(
             "button",
             {
               onClick: (e) => {
@@ -425,7 +495,7 @@
               className: "text-slate-400 hover:text-white transition-colors cursor-pointer"
             },
             /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined text-[16px]" }, "close")
-          )), /* @__PURE__ */ window.React.createElement("div", { className: "overflow-y-auto max-h-32 custom-scrollbar pr-1 select-text" }, slotData.type === "image" ? /* @__PURE__ */ window.React.createElement("span", { className: "italic opacity-50" }, t("imagePreview")) : truncateContent(slotData.content, 500)))
+          )), /* @__PURE__ */ window.React.createElement("div", { className: "overflow-y-auto max-h-32 min-h-0 custom-scrollbar pr-1 select-text" }, slotData.type === "image" ? /* @__PURE__ */ window.React.createElement("span", { className: "italic opacity-50" }, t("imagePreview")) : truncateContent(slotData.content, 500)))
         ),
         document.body
       );
