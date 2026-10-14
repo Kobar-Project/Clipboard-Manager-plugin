@@ -275,14 +275,12 @@ const InlineClipboardUI = () => {
 
     const { orientation, design, edgePosition, sidebarWidth } = appState;
 
-    // R-13P: slots form a grid sized to the bar thickness (columns in a vertical bar, rows in a horizontal one).
+    // Horizontal bar: slots flow in columns along the bar and wrap to the next column once the bar thickness is filled.
     const SLOT_CELL = 16;
-    const SLOT_GAP = 6;
-    const BAR_PADDING = 8;
-    const lanes = Math.max(1, Math.floor(((Number(sidebarWidth) || 56) - BAR_PADDING + SLOT_GAP) / (SLOT_CELL + SLOT_GAP)));
-    const gridStyle = orientation === 'horizontal'
-        ? { display: 'grid', gridTemplateRows: `repeat(${Math.min(lanes, slots.length)}, ${SLOT_CELL}px)`, gridAutoFlow: 'column', gridAutoColumns: `${SLOT_CELL}px`, gap: `${SLOT_GAP}px` }
-        : { display: 'grid', gridTemplateColumns: `repeat(${Math.min(lanes, slots.length)}, ${SLOT_CELL}px)`, gridAutoRows: `${SLOT_CELL}px`, gap: `${SLOT_GAP}px`, justifyContent: 'center' };
+    const barThickness = Math.max(SLOT_CELL, (Number(sidebarWidth) || 56) - 8);
+    const slotsContainerStyle = orientation === 'horizontal'
+        ? { display: 'flex', flexDirection: 'column', flexWrap: 'wrap', alignContent: 'center', justifyContent: 'center', gap: 6, maxHeight: barThickness, height: '100%' }
+        : undefined;
 
     const [activePreviewSlot, setActivePreviewSlot] = useState(null);
     const [previewRect, setPreviewRect] = useState(null);
@@ -457,7 +455,7 @@ const InlineClipboardUI = () => {
             </TooltipButton>
 
             {/* Slots Grid */}
-            <div style={gridStyle} className="relative" onClick={e => e.stopPropagation()}>
+            <div style={slotsContainerStyle} className={`relative ${orientation === 'horizontal' ? '' : 'flex flex-wrap justify-center content-center gap-2 w-full max-w-full px-1'}`} onClick={e => e.stopPropagation()}>
                 {slots.map((slot, index) => {
                     // Inline styles on purpose: state must stay visible regardless of host CSS (bar-widget normalisation).
                     const dot = getSlotDotStyle(slot.state);

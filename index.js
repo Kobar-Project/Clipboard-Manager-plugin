@@ -234,10 +234,8 @@
     }, []);
     const { orientation, design, edgePosition, sidebarWidth } = appState;
     const SLOT_CELL = 16;
-    const SLOT_GAP = 6;
-    const BAR_PADDING = 8;
-    const lanes = Math.max(1, Math.floor(((Number(sidebarWidth) || 56) - BAR_PADDING + SLOT_GAP) / (SLOT_CELL + SLOT_GAP)));
-    const gridStyle = orientation === "horizontal" ? { display: "grid", gridTemplateRows: `repeat(${Math.min(lanes, slots.length)}, ${SLOT_CELL}px)`, gridAutoFlow: "column", gridAutoColumns: `${SLOT_CELL}px`, gap: `${SLOT_GAP}px` } : { display: "grid", gridTemplateColumns: `repeat(${Math.min(lanes, slots.length)}, ${SLOT_CELL}px)`, gridAutoRows: `${SLOT_CELL}px`, gap: `${SLOT_GAP}px`, justifyContent: "center" };
+    const barThickness = Math.max(SLOT_CELL, (Number(sidebarWidth) || 56) - 8);
+    const slotsContainerStyle = orientation === "horizontal" ? { display: "flex", flexDirection: "column", flexWrap: "wrap", alignContent: "center", justifyContent: "center", gap: 6, maxHeight: barThickness, height: "100%" } : void 0;
     const [activePreviewSlot, setActivePreviewSlot] = react.useState(null);
     const [previewRect, setPreviewRect] = react.useState(null);
     react.useEffect(() => {
@@ -375,7 +373,7 @@
         label: isCopyModeActive ? t("stopCopyMode") : t("startCopyMode")
       },
       /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "var(--kb-bar-icon, 20px)" } }, "content_copy")
-    ), /* @__PURE__ */ window.React.createElement("div", { style: gridStyle, className: "relative", onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => {
+    ), /* @__PURE__ */ window.React.createElement("div", { style: slotsContainerStyle, className: `relative ${orientation === "horizontal" ? "" : "flex flex-wrap justify-center content-center gap-2 w-full max-w-full px-1"}`, onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => {
       const dot = getSlotDotStyle(slot.state);
       return /* @__PURE__ */ window.React.createElement(
         "span",
