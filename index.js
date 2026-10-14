@@ -73,6 +73,7 @@
     notify();
   };
   const toggleCopyMode = () => {
+    lastPasted = null;
     if (globalState.isCopyModeActive) {
       globalState.slots = globalState.slots.map((s) => s.state === "listening" ? { ...s, state: "empty" } : s);
       globalState.isCopyModeActive = false;
@@ -91,6 +92,7 @@
     notify();
   };
   const togglePasteMode = () => {
+    lastPasted = null;
     if (globalState.isPasteModeActive) {
       globalState.slots = globalState.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s);
       globalState.isPasteModeActive = false;
@@ -167,6 +169,24 @@
     notify();
     return item;
   };
+  let lastPasted = null;
+  const RESTORE_WINDOW_MS = 1e4;
+  const restoreLastPasted = () => {
+    const pending = lastPasted;
+    lastPasted = null;
+    if (!pending || Date.now() - pending.at > RESTORE_WINDOW_MS) return;
+    const current = globalState.slots[pending.index];
+    if (!current || current.state !== "empty") return;
+    const resumePaste = !globalState.isCopyModeActive;
+    let newSlots = globalState.slots.map((s) => s.state === "selected" ? { ...s, state: "filled" } : s);
+    newSlots[pending.index] = { ...pending.slot, state: resumePaste ? "selected" : "filled" };
+    globalState.slots = newSlots;
+    if (resumePaste && !globalState.isPasteModeActive) {
+      globalState.isPasteModeActive = true;
+      window.api?.setGlobalPasteMode?.(true);
+    }
+    notify();
+  };
   const clearSlot = (index) => {
     if (globalState.slots[index].state === "filled") {
       globalState.slots = [...globalState.slots];
@@ -175,6 +195,7 @@
     }
   };
   const resetAll = () => {
+    lastPasted = null;
     globalState.slots = Array(globalState.slotCount).fill().map(() => ({ state: "empty", type: null, content: null }));
     globalState.isCopyModeActive = false;
     globalState.isPasteModeActive = false;
@@ -196,8 +217,8 @@
     globalState.slots = newSlots;
     notify();
   };
-  function getSlotDotStyle(state) {
-    const base = { display: "block", boxSizing: "border-box", width: 12, height: 12, borderRadius: "50%", borderStyle: "solid", borderWidth: 2, transition: "all 0.2s ease-in-out" };
+  function getSlotDotStyle(state, size = 12) {
+    const base = { display: "block", boxSizing: "border-box", width: size, height: size, flex: "none", borderRadius: "50%", borderStyle: "solid", borderWidth: 2, transition: "all 0.2s ease-in-out" };
     switch (state) {
       case "listening":
         return { ...base, borderColor: "#3b82f6", background: "rgba(59,130,246,0.45)" };
@@ -221,21 +242,56 @@
       children
     );
   };
+  const DENSITY_LANES = { compact: 2, normal: 3, comfortable: 4 };
+  const SLOT_GAP = 3;
+  const SLOT_CELL_MAX = 16;
+  const SLOT_CELL_MIN = 9;
+  function densityOf(store) {
+    if (DENSITY_LANES[store.density]) return store.density;
+    const w = Number(store.sidebarWidth);
+    if (!Number.isFinite(w)) return "normal";
+    return w < 44 ? "compact" : w > 52 ? "comfortable" : "normal";
+  }
+  function slotGridGeometry({ orientation, density, sidebarWidth, iconScale }, slotCount) {
+    const zoom = Number(iconScale) > 0 ? Number(iconScale) : 1;
+    const thickness = Number(sidebarWidth) > 0 ? Number(sidebarWidth) : 48;
+    const across = (thickness - 10) / zoom;
+    let lanes = DENSITY_LANES[density] || 3;
+    let cell = Math.min(SLOT_CELL_MAX, Math.floor((across - (lanes - 1) * SLOT_GAP) / lanes));
+    while (lanes > 2 && cell < SLOT_CELL_MIN) {
+      lanes -= 1;
+      cell = Math.min(SLOT_CELL_MAX, Math.floor((across - (lanes - 1) * SLOT_GAP) / lanes));
+    }
+    cell = Math.max(SLOT_CELL_MIN, cell);
+    const count = Math.max(1, slotCount);
+    const lines = Math.ceil(count / lanes);
+    const acrossPx = lanes * cell + (lanes - 1) * SLOT_GAP;
+    const alongPx = lines * cell + (lines - 1) * SLOT_GAP;
+    const dot = Math.max(7, Math.min(12, cell - 3));
+    const horizontal = orientation === "horizontal";
+    const style = horizontal ? { display: "grid", gridAutoFlow: "column", gridTemplateRows: `repeat(${lanes}, ${cell}px)`, gridAutoColumns: `${cell}px`, gap: SLOT_GAP, width: alongPx, height: acrossPx } : { display: "grid", gridAutoFlow: "row", gridTemplateColumns: `repeat(${lanes}, ${cell}px)`, gridAutoRows: `${cell}px`, gap: SLOT_GAP, width: acrossPx, height: alongPx };
+    return { cell, dot, lanes, style: { ...style, flex: "none", position: "relative" } };
+  }
+  const pickAppState = (store) => ({
+    orientation: store.orientation,
+    design: store.design,
+    edgePosition: store.edgePosition,
+    sidebarWidth: store.sidebarWidth,
+    iconScale: store.iconScale,
+    density: densityOf(store)
+  });
+  const sameAppState = (a, b) => a.orientation === b.orientation && a.design === b.design && a.edgePosition === b.edgePosition && a.sidebarWidth === b.sidebarWidth && a.iconScale === b.iconScale && a.density === b.density;
   const InlineClipboardUI = () => {
     const { slots, isCopyModeActive, isPasteModeActive, autoHideDuration } = usePluginStore();
-    const [appState, setAppState] = react.useState(() => {
-      const store = window.useAppStore.getState();
-      return { orientation: store.orientation, design: store.design, edgePosition: store.edgePosition, sidebarWidth: store.sidebarWidth };
-    });
+    const [appState, setAppState] = react.useState(() => pickAppState(window.useAppStore.getState()));
     react.useEffect(() => {
       return window.useAppStore.subscribe((state) => {
-        setAppState((prev) => prev.orientation === state.orientation && prev.design === state.design && prev.edgePosition === state.edgePosition && prev.sidebarWidth === state.sidebarWidth ? prev : { orientation: state.orientation, design: state.design, edgePosition: state.edgePosition, sidebarWidth: state.sidebarWidth });
+        const next = pickAppState(state);
+        setAppState((prev) => sameAppState(prev, next) ? prev : next);
       });
     }, []);
-    const { orientation, design, edgePosition, sidebarWidth } = appState;
-    const SLOT_CELL = 16;
-    const barThickness = Math.max(SLOT_CELL, (Number(sidebarWidth) || 56) - 8);
-    const slotsContainerStyle = orientation === "horizontal" ? { display: "flex", flexDirection: "column", flexWrap: "wrap", alignContent: "center", justifyContent: "center", gap: 6, maxHeight: barThickness, height: "100%" } : void 0;
+    const { orientation, design, edgePosition } = appState;
+    const grid = slotGridGeometry(appState, slots.length);
     const [activePreviewSlot, setActivePreviewSlot] = react.useState(null);
     const [previewRect, setPreviewRect] = react.useState(null);
     react.useEffect(() => {
@@ -252,14 +308,18 @@
     react.useEffect(() => {
       let cleanupPaste = null;
       let lastPasteTime = 0;
+      const hostSerialises = (window.api?.globalPasteVersion ?? 1) >= 2;
       if (isPasteModeActive && window.api?.onRequestNextPaste) {
         cleanupPaste = window.api.onRequestNextPaste(() => {
           const now = Date.now();
-          if (now - lastPasteTime < 600) return;
+          if (!hostSerialises && now - lastPasteTime < 600) return;
           lastPasteTime = now;
-          const state = globalState;
-          const targetSlot = state.slots.find((s) => s.state === "selected") || state.slots.find((s) => s.state === "filled");
+          const selectedIndex = globalState.slots.findIndex((s) => s.state === "selected");
+          const index = selectedIndex !== -1 ? selectedIndex : globalState.slots.findIndex((s) => s.state === "filled");
+          const targetSlot = index !== -1 ? globalState.slots[index] : null;
           if (targetSlot && targetSlot.content && targetSlot.type) {
+            if (selectedIndex === -1) setSelectedSlot(index);
+            lastPasted = { index, slot: { state: "filled", type: targetSlot.type, content: targetSlot.content }, at: now };
             window.api?.executeGlobalPaste({ type: targetSlot.type, content: targetSlot.content });
             pasteNextItem();
           }
@@ -269,6 +329,12 @@
         if (cleanupPaste) cleanupPaste();
       };
     }, [isPasteModeActive]);
+    react.useEffect(() => {
+      if (!window.api?.onClipboardPasteError) return void 0;
+      return window.api.onClipboardPasteError(() => {
+        restoreLastPasted();
+      });
+    }, []);
     react.useEffect(() => {
       const hasPasteable = slots.some((s) => s.state === "filled" || s.state === "selected");
       if (isPasteModeActive && !hasPasteable) {
@@ -363,7 +429,7 @@
         document.body
       );
     };
-    return /* @__PURE__ */ window.React.createElement("div", { className: `flex ${orientation === "horizontal" ? "flex-row h-full" : "flex-col w-full"} items-center justify-center gap-2 relative no-drag-region` }, /* @__PURE__ */ window.React.createElement(
+    return /* @__PURE__ */ window.React.createElement("div", { className: `flex ${orientation === "horizontal" ? "flex-row" : "flex-col"} items-center justify-center gap-1 relative no-drag-region`, style: { flex: "none" } }, /* @__PURE__ */ window.React.createElement(
       TooltipButton,
       {
         onClick: toggleCopyMode,
@@ -373,8 +439,8 @@
         label: isCopyModeActive ? t("stopCopyMode") : t("startCopyMode")
       },
       /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "var(--kb-bar-icon, 20px)" } }, "content_copy")
-    ), /* @__PURE__ */ window.React.createElement("div", { style: slotsContainerStyle, className: `relative ${orientation === "horizontal" ? "" : "flex flex-wrap justify-center content-center gap-2 w-full max-w-full px-1"}`, onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => {
-      const dot = getSlotDotStyle(slot.state);
+    ), /* @__PURE__ */ window.React.createElement("div", { style: grid.style, "data-cbm-slot-grid": "", "data-lanes": grid.lanes, onClick: (e) => e.stopPropagation() }, slots.map((slot, index) => {
+      const dot = getSlotDotStyle(slot.state, grid.dot);
       return /* @__PURE__ */ window.React.createElement(
         "span",
         {
@@ -383,7 +449,7 @@
           "aria-checked": slot.state !== "empty",
           title: slot.content ? slot.type === "image" ? t("imagePreview") : truncateContent(slot.content, 100) : t("emptySlotTip"),
           className: `relative flex items-center justify-center cursor-pointer transition-transform ${activePreviewSlot === index ? "scale-125 z-10" : "hover:scale-110"}`,
-          style: { width: SLOT_CELL, height: SLOT_CELL, opacity: !isCopyModeActive && !isPasteModeActive && slot.state === "empty" ? 0.5 : 1 },
+          style: { width: grid.cell, height: grid.cell, opacity: !isCopyModeActive && !isPasteModeActive && slot.state === "empty" ? 0.5 : 1 },
           onClick: (e) => handleSlotClick(e, index, slot.state),
           onDoubleClick: (e) => {
             e.preventDefault();

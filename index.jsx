@@ -84,6 +84,7 @@ const setAutoHideDuration = (ms) => {
 };
 
 const toggleCopyMode = () => {
+    lastPasted = null;
     if (globalState.isCopyModeActive) {
         globalState.slots = globalState.slots.map(s => s.state === 'listening' ? { ...s, state: 'empty' } : s);
         globalState.isCopyModeActive = false;
@@ -103,6 +104,7 @@ const toggleCopyMode = () => {
 };
 
 const togglePasteMode = () => {
+    lastPasted = null;
     if (globalState.isPasteModeActive) {
         globalState.slots = globalState.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s);
         globalState.isPasteModeActive = false;
@@ -189,6 +191,27 @@ const pasteNextItem = () => {
     return item;
 };
 
+// The item handed to the host by the last request-next-paste; restored if the host reports that nothing was pasted.
+let lastPasted = null;
+const RESTORE_WINDOW_MS = 10000;
+
+const restoreLastPasted = () => {
+    const pending = lastPasted;
+    lastPasted = null;
+    if (!pending || Date.now() - pending.at > RESTORE_WINDOW_MS) return;
+    const current = globalState.slots[pending.index];
+    if (!current || current.state !== 'empty') return; // the user changed the slot meanwhile
+    const resumePaste = !globalState.isCopyModeActive;
+    let newSlots = globalState.slots.map(s => s.state === 'selected' ? { ...s, state: 'filled' } : s);
+    newSlots[pending.index] = { ...pending.slot, state: resumePaste ? 'selected' : 'filled' };
+    globalState.slots = newSlots;
+    if (resumePaste && !globalState.isPasteModeActive) {
+        globalState.isPasteModeActive = true;
+        window.api?.setGlobalPasteMode?.(true);
+    }
+    notify();
+};
+
 const clearSlot = (index) => {
     if (globalState.slots[index].state === 'filled') {
         globalState.slots = [...globalState.slots];
@@ -198,6 +221,7 @@ const clearSlot = (index) => {
 };
 
 const resetAll = () => {
+    lastPasted = null;
     globalState.slots = Array(globalState.slotCount).fill().map(() => ({ state: 'empty', type: null, content: null }));
     globalState.isCopyModeActive = false;
     globalState.isPasteModeActive = false;
@@ -235,8 +259,8 @@ function getSlotColorClass(state, design) {
     }
 }
 
-function getSlotDotStyle(state) {
-    const base = { display: 'block', boxSizing: 'border-box', width: 12, height: 12, borderRadius: '50%', borderStyle: 'solid', borderWidth: 2, transition: 'all 0.2s ease-in-out' };
+function getSlotDotStyle(state, size = 12) {
+    const base = { display: 'block', boxSizing: 'border-box', width: size, height: size, flex: 'none', borderRadius: '50%', borderStyle: 'solid', borderWidth: 2, transition: 'all 0.2s ease-in-out' };
     switch (state) {
         case 'listening': return { ...base, borderColor: '#3b82f6', background: 'rgba(59,130,246,0.45)' };
         case 'filled': return { ...base, borderColor: '#22c55e', background: '#22c55e' };
@@ -258,29 +282,73 @@ const TooltipButton = ({ onClick, onDoubleClick, className, style, label, childr
     );
 };
 
+// --- Slot grid geometry ---
+// Slots sit across the bar thickness in a fixed number of lanes (columns in a vertical bar, rows in a horizontal bar) and the
+// grid grows along the bar length. The grid gets an explicit pixel size so the whole widget is one block whose size the
+// host's flex layout can measure (a wrapping flex column does not report its real width and overflowed onto other icons).
+const DENSITY_LANES = { compact: 2, normal: 3, comfortable: 4 };
+const SLOT_GAP = 3;
+const SLOT_CELL_MAX = 16;
+const SLOT_CELL_MIN = 9;
+
+function densityOf(store) {
+    if (DENSITY_LANES[store.density]) return store.density;
+    const w = Number(store.sidebarWidth);
+    if (!Number.isFinite(w)) return 'normal';
+    return w < 44 ? 'compact' : w > 52 ? 'comfortable' : 'normal';
+}
+
+function slotGridGeometry({ orientation, density, sidebarWidth, iconScale }, slotCount) {
+    const zoom = Number(iconScale) > 0 ? Number(iconScale) : 1;
+    const thickness = Number(sidebarWidth) > 0 ? Number(sidebarWidth) : 48;
+    // Space across the bar in the widget's own (zoomed) CSS pixels, keeping about 5 screen px free on each side.
+    const across = (thickness - 10) / zoom;
+    let lanes = DENSITY_LANES[density] || 3;
+    let cell = Math.min(SLOT_CELL_MAX, Math.floor((across - (lanes - 1) * SLOT_GAP) / lanes));
+    while (lanes > 2 && cell < SLOT_CELL_MIN) {
+        lanes -= 1;
+        cell = Math.min(SLOT_CELL_MAX, Math.floor((across - (lanes - 1) * SLOT_GAP) / lanes));
+    }
+    cell = Math.max(SLOT_CELL_MIN, cell);
+    const count = Math.max(1, slotCount);
+    const lines = Math.ceil(count / lanes);
+    const acrossPx = lanes * cell + (lanes - 1) * SLOT_GAP;
+    const alongPx = lines * cell + (lines - 1) * SLOT_GAP;
+    const dot = Math.max(7, Math.min(12, cell - 3));
+    const horizontal = orientation === 'horizontal';
+    const style = horizontal
+        ? { display: 'grid', gridAutoFlow: 'column', gridTemplateRows: `repeat(${lanes}, ${cell}px)`, gridAutoColumns: `${cell}px`, gap: SLOT_GAP, width: alongPx, height: acrossPx }
+        : { display: 'grid', gridAutoFlow: 'row', gridTemplateColumns: `repeat(${lanes}, ${cell}px)`, gridAutoRows: `${cell}px`, gap: SLOT_GAP, width: acrossPx, height: alongPx };
+    return { cell, dot, lanes, style: { ...style, flex: 'none', position: 'relative' } };
+}
+
+const pickAppState = (store) => ({
+    orientation: store.orientation,
+    design: store.design,
+    edgePosition: store.edgePosition,
+    sidebarWidth: store.sidebarWidth,
+    iconScale: store.iconScale,
+    density: densityOf(store),
+});
+
+const sameAppState = (a, b) => a.orientation === b.orientation && a.design === b.design && a.edgePosition === b.edgePosition
+    && a.sidebarWidth === b.sidebarWidth && a.iconScale === b.iconScale && a.density === b.density;
+
 const InlineClipboardUI = () => {
     const { slots, isCopyModeActive, isPasteModeActive, autoHideDuration } = usePluginStore();
-    
-    // Subscribe to KoBar app store natively
-    const [appState, setAppState] = useState(() => {
-        const store = window.useAppStore.getState();
-        return { orientation: store.orientation, design: store.design, edgePosition: store.edgePosition, sidebarWidth: store.sidebarWidth };
-    });
+
+    // Subscribe to KoBar app store natively (orientation / density changes re-render the grid at once)
+    const [appState, setAppState] = useState(() => pickAppState(window.useAppStore.getState()));
 
     useEffect(() => {
         return window.useAppStore.subscribe((state) => {
-            setAppState((prev) => (prev.orientation === state.orientation && prev.design === state.design && prev.edgePosition === state.edgePosition && prev.sidebarWidth === state.sidebarWidth) ? prev : { orientation: state.orientation, design: state.design, edgePosition: state.edgePosition, sidebarWidth: state.sidebarWidth });
+            const next = pickAppState(state);
+            setAppState((prev) => (sameAppState(prev, next) ? prev : next));
         });
     }, []);
 
-    const { orientation, design, edgePosition, sidebarWidth } = appState;
-
-    // Horizontal bar: slots flow in columns along the bar and wrap to the next column once the bar thickness is filled.
-    const SLOT_CELL = 16;
-    const barThickness = Math.max(SLOT_CELL, (Number(sidebarWidth) || 56) - 8);
-    const slotsContainerStyle = orientation === 'horizontal'
-        ? { display: 'flex', flexDirection: 'column', flexWrap: 'wrap', alignContent: 'center', justifyContent: 'center', gap: 6, maxHeight: barThickness, height: '100%' }
-        : undefined;
+    const { orientation, design, edgePosition } = appState;
+    const grid = slotGridGeometry(appState, slots.length);
 
     const [activePreviewSlot, setActivePreviewSlot] = useState(null);
     const [previewRect, setPreviewRect] = useState(null);
@@ -305,17 +373,23 @@ const InlineClipboardUI = () => {
     // Register request-next-paste listener dynamically based on paste mode
     useEffect(() => {
         let cleanupPaste = null;
-        let lastPasteTime = 0; // Debounce state
+        let lastPasteTime = 0; // Debounce state (old hosts only)
+        // Host v2 (globalPasteVersion >= 2) serialises presses itself: every request is answered, no debounce.
+        const hostSerialises = (window.api?.globalPasteVersion ?? 1) >= 2;
 
         if (isPasteModeActive && window.api?.onRequestNextPaste) {
             cleanupPaste = window.api.onRequestNextPaste(() => {
                 const now = Date.now();
-                if (now - lastPasteTime < 600) return; // Prevent double trigger within 600ms
+                if (!hostSerialises && now - lastPasteTime < 600) return; // Old host: prevent double trigger within 600ms
                 lastPasteTime = now;
 
-                const state = globalState; // Read fresh from global
-                const targetSlot = state.slots.find(s => s.state === 'selected') || state.slots.find(s => s.state === 'filled');
+                // At most one executeGlobalPaste per request.
+                const selectedIndex = globalState.slots.findIndex(s => s.state === 'selected');
+                const index = selectedIndex !== -1 ? selectedIndex : globalState.slots.findIndex(s => s.state === 'filled');
+                const targetSlot = index !== -1 ? globalState.slots[index] : null;
                 if (targetSlot && targetSlot.content && targetSlot.type) {
+                    if (selectedIndex === -1) setSelectedSlot(index);
+                    lastPasted = { index, slot: { state: 'filled', type: targetSlot.type, content: targetSlot.content }, at: now };
                     window.api?.executeGlobalPaste({ type: targetSlot.type, content: targetSlot.content });
                     pasteNextItem();
                 }
@@ -325,6 +399,14 @@ const InlineClipboardUI = () => {
             if (cleanupPaste) cleanupPaste();
         };
     }, [isPasteModeActive]);
+
+    // Host v2: nothing was pasted (clipboard write failed / no accessibility) -> put the item back so no slot is skipped.
+    useEffect(() => {
+        if (!window.api?.onClipboardPasteError) return undefined;
+        return window.api.onClipboardPasteError(() => {
+            restoreLastPasted();
+        });
+    }, []);
 
     useEffect(() => {
         const hasPasteable = slots.some(s => s.state === 'filled' || s.state === 'selected');
@@ -442,7 +524,7 @@ const InlineClipboardUI = () => {
     };
 
     return (
-        <div className={`flex ${orientation === 'horizontal' ? 'flex-row h-full' : 'flex-col w-full'} items-center justify-center gap-2 relative no-drag-region`}>
+        <div className={`flex ${orientation === 'horizontal' ? 'flex-row' : 'flex-col'} items-center justify-center gap-1 relative no-drag-region`} style={{ flex: 'none' }}>
             {/* Copy Button */}
             <TooltipButton
                 onClick={toggleCopyMode}
@@ -455,10 +537,10 @@ const InlineClipboardUI = () => {
             </TooltipButton>
 
             {/* Slots Grid */}
-            <div style={slotsContainerStyle} className={`relative ${orientation === 'horizontal' ? '' : 'flex flex-wrap justify-center content-center gap-2 w-full max-w-full px-1'}`} onClick={e => e.stopPropagation()}>
+            <div style={grid.style} data-cbm-slot-grid="" data-lanes={grid.lanes} onClick={e => e.stopPropagation()}>
                 {slots.map((slot, index) => {
                     // Inline styles on purpose: state must stay visible regardless of host CSS (bar-widget normalisation).
-                    const dot = getSlotDotStyle(slot.state);
+                    const dot = getSlotDotStyle(slot.state, grid.dot);
                     return (
                         <span
                             key={index}
@@ -466,7 +548,7 @@ const InlineClipboardUI = () => {
                             aria-checked={slot.state !== 'empty'}
                             title={slot.content ? (slot.type === 'image' ? t('imagePreview') : truncateContent(slot.content, 100)) : t('emptySlotTip')}
                             className={`relative flex items-center justify-center cursor-pointer transition-transform ${activePreviewSlot === index ? 'scale-125 z-10' : 'hover:scale-110'}`}
-                            style={{ width: SLOT_CELL, height: SLOT_CELL, opacity: !isCopyModeActive && !isPasteModeActive && slot.state === 'empty' ? 0.5 : 1 }}
+                            style={{ width: grid.cell, height: grid.cell, opacity: !isCopyModeActive && !isPasteModeActive && slot.state === 'empty' ? 0.5 : 1 }}
                             onClick={(e) => handleSlotClick(e, index, slot.state)}
                             onDoubleClick={(e) => { e.preventDefault(); clearSlot(index); }}
                         >

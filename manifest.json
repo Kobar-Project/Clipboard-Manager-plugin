@@ -1,7 +1,7 @@
 {
   "id": "com.kobar.clipboardmanager",
   "name": "Clipboard Manager",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Sequential multi-slot clipboard manager for KoBar. Stores your copied items in visual slots and pastes them in order.",
   "author": "KoBar",
   "entry": "index.js",
@@ -24,7 +24,7 @@
     "zh",
     "hi"
   ],
-  "versionNote": "Slot layout restored to the 1.0.3 look; in a horizontal bar slots now wrap within the bar thickness instead of overflowing.",
+  "versionNote": "Slotlar artık Kopyala ve Yapıştır düğmeleri arasında tek bir blok olarak duruyor: dikey ve yatay çubukta yoğunluğa göre 2/3/4 sıra, başka simgelerle çakışma yok. Yeni KoBar sürümünde hızlı art arda Ctrl+V basışları atlanmıyor; yapıştırma başarısız olursa öğe geri konuyor.",
   "image": "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/clipboardmanager.png",
   "storeImage": [
     "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/Clipboard-Manager1.png",
