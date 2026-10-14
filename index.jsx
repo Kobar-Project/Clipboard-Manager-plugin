@@ -16,7 +16,7 @@ const TRANSLATIONS = {
 };
 
 const t = (key) => {
-    const store = window.useAppStore.getState();
+    const store = window.useAppStore?.getState() || { language: 'en' };
     const lang = store.language || 'en';
     const dict = TRANSLATIONS[lang] || TRANSLATIONS['en'];
     return dict[key] || TRANSLATIONS['en'][key] || key;
@@ -338,9 +338,10 @@ const InlineClipboardUI = () => {
     const { slots, isCopyModeActive, isPasteModeActive, autoHideDuration } = usePluginStore();
 
     // Subscribe to KoBar app store natively (orientation / density changes re-render the grid at once)
-    const [appState, setAppState] = useState(() => pickAppState(window.useAppStore.getState()));
+    const [appState, setAppState] = useState(() => pickAppState(window.useAppStore?.getState() || {}));
 
     useEffect(() => {
+        if (!window.useAppStore) return undefined;
         return window.useAppStore.subscribe((state) => {
             const next = pickAppState(state);
             setAppState((prev) => (sameAppState(prev, next) ? prev : next));
@@ -380,7 +381,7 @@ const InlineClipboardUI = () => {
         if (isPasteModeActive && window.api?.onRequestNextPaste) {
             cleanupPaste = window.api.onRequestNextPaste(() => {
                 const now = Date.now();
-                if (!hostSerialises && now - lastPasteTime < 600) return; // Old host: prevent double trigger within 600ms
+                if (!hostSerialises && now - lastPasteTime < 300) return; // Old host: prevent double trigger within 300ms
                 lastPasteTime = now;
 
                 // At most one executeGlobalPaste per request.
@@ -619,15 +620,15 @@ const SettingsPanelUI = () => {
 // --- Plugin Registration ---
 
 // Remove old button/panel if hot-reloading
-if (window.KoBarExtensions.buttons) {
+if (window.KoBarExtensions?.buttons) {
     window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter(b => b.id !== 'kobar-clipboard-manager-btn');
 }
-if (window.KoBarExtensions.panels?.delete) {
+if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete('kobar-clipboard-manager-panel');
 }
 
 // Register the Inline Widget instead of a sidebar button
-if (window.KoBarExtensions.registerInlineWidget) {
+if (window.KoBarExtensions?.registerInlineWidget) {
     window.KoBarExtensions.registerInlineWidget('kobar-clipboard-manager-inline', {
         id: 'kobar-clipboard-manager-inline',
         render: () => window.React.createElement(InlineClipboardUI)
@@ -635,7 +636,7 @@ if (window.KoBarExtensions.registerInlineWidget) {
 }
 
 // Register Settings Panel
-if (window.KoBarExtensions.registerSettingsPanel) {
+if (window.KoBarExtensions?.registerSettingsPanel) {
     window.KoBarExtensions.registerSettingsPanel('com.kobar.clipboardmanager', {
         id: 'com.kobar.clipboardmanager',
         render: () => window.React.createElement(SettingsPanelUI)

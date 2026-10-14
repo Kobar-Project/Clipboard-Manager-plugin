@@ -24,7 +24,7 @@
     "zh",
     "hi"
   ],
-  "versionNote": "Slotlar artık Kopyala ve Yapıştır düğmeleri arasında tek bir blok olarak duruyor: dikey ve yatay çubukta yoğunluğa göre 2/3/4 sıra, başka simgelerle çakışma yok. Yeni KoBar sürümünde hızlı art arda Ctrl+V basışları atlanmıyor; yapıştırma başarısız olursa öğe geri konuyor.",
+  "versionNote": "Slots now sit as one block between the Copy and Paste buttons: 2/3/4 rows by density in both vertical and horizontal bars, no overlap with other icons. On the new KoBar, rapid back-to-back Ctrl+V presses are no longer skipped; if a paste fails the item is put back.",
   "image": "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/clipboardmanager.png",
   "storeImage": [
     "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/Clipboard-Manager1.png",

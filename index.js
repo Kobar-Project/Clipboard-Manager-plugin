@@ -13,7 +13,7 @@
     hi: { copy: "कॉपी", paste: "पेस्ट", numberOfSlots: "स्लॉट की संख्या", slotsMinMaxInfo: "न्यूनतम: 4, अधिकतम: 20.", emptySlotTip: "स्लॉट भरने के लिए कॉपी करें", stopCopyMode: "कॉपी मोड रोकें", startCopyMode: "कॉपी मोड प्रारंभ करें", stopPasteMode: "पेस्ट मोड रोकें", startPasteMode: "पेस्ट मोड प्रारंभ करें", autoAddClipboard: "स्वतः जोड़ें", autoAddClipboardDesc: "स्लॉट में स्वतः रंग भेजें।", imagePreview: "छवि सामग्री", copyAndPaste: "कॉपी और पेस्ट", settings: "सेटिंग्स" }
   };
   const t = (key) => {
-    const store = window.useAppStore.getState();
+    const store = window.useAppStore?.getState() || { language: "en" };
     const lang = store.language || "en";
     const dict = TRANSLATIONS[lang] || TRANSLATIONS["en"];
     return dict[key] || TRANSLATIONS["en"][key] || key;
@@ -283,8 +283,9 @@
   const sameAppState = (a, b) => a.orientation === b.orientation && a.design === b.design && a.edgePosition === b.edgePosition && a.sidebarWidth === b.sidebarWidth && a.iconScale === b.iconScale && a.density === b.density;
   const InlineClipboardUI = () => {
     const { slots, isCopyModeActive, isPasteModeActive, autoHideDuration } = usePluginStore();
-    const [appState, setAppState] = react.useState(() => pickAppState(window.useAppStore.getState()));
+    const [appState, setAppState] = react.useState(() => pickAppState(window.useAppStore?.getState() || {}));
     react.useEffect(() => {
+      if (!window.useAppStore) return void 0;
       return window.useAppStore.subscribe((state) => {
         const next = pickAppState(state);
         setAppState((prev) => sameAppState(prev, next) ? prev : next);
@@ -312,7 +313,7 @@
       if (isPasteModeActive && window.api?.onRequestNextPaste) {
         cleanupPaste = window.api.onRequestNextPaste(() => {
           const now = Date.now();
-          if (!hostSerialises && now - lastPasteTime < 600) return;
+          if (!hostSerialises && now - lastPasteTime < 300) return;
           lastPasteTime = now;
           const selectedIndex = globalState.slots.findIndex((s) => s.state === "selected");
           const index = selectedIndex !== -1 ? selectedIndex : globalState.slots.findIndex((s) => s.state === "filled");
@@ -498,19 +499,19 @@
       /* @__PURE__ */ window.React.createElement("option", { value: 0 }, "Never Hide")
     )));
   };
-  if (window.KoBarExtensions.buttons) {
+  if (window.KoBarExtensions?.buttons) {
     window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter((b) => b.id !== "kobar-clipboard-manager-btn");
   }
-  if (window.KoBarExtensions.panels?.delete) {
+  if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete("kobar-clipboard-manager-panel");
   }
-  if (window.KoBarExtensions.registerInlineWidget) {
+  if (window.KoBarExtensions?.registerInlineWidget) {
     window.KoBarExtensions.registerInlineWidget("kobar-clipboard-manager-inline", {
       id: "kobar-clipboard-manager-inline",
       render: () => window.React.createElement(InlineClipboardUI)
     });
   }
-  if (window.KoBarExtensions.registerSettingsPanel) {
+  if (window.KoBarExtensions?.registerSettingsPanel) {
     window.KoBarExtensions.registerSettingsPanel("com.kobar.clipboardmanager", {
       id: "com.kobar.clipboardmanager",
       render: () => window.React.createElement(SettingsPanelUI)
