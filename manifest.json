@@ -31,5 +31,11 @@
     "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/Clipboard-Manager2.png",
     "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/Clipboard-Manager3.png"
   ],
+  "bar": {
+    "tile": {
+      "template": "meter",
+      "sensitive": true
+    }
+  },
   "apiVersion": "1.0.0"
 }

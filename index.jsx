@@ -378,70 +378,8 @@ const InlineClipboardUI = () => {
         return () => { window.removeEventListener('resize', place); if (ro) ro.disconnect(); };
     }, [activePreviewSlot, previewRect, orientation, edgePosition, slots]);
 
-    // Register IPC Listeners
-    useEffect(() => {
-        let cleanupUpdate = null;
-        let cleanupPaste = null;
-
-        if (window.api?.onClipboardUpdate) {
-            cleanupUpdate = window.api.onClipboardUpdate((data) => {
-                addClipboardItem(data.type, data.content);
-            });
-        }
-        
-        return () => {
-            if (cleanupUpdate) cleanupUpdate();
-            if (cleanupPaste) cleanupPaste();
-        };
-    }, []); // Run once on mount
-
-    // Register request-next-paste listener dynamically based on paste mode
-    useEffect(() => {
-        let cleanupPaste = null;
-        let lastPasteTime = 0; // Debounce state (old hosts only)
-        // Host v2 (globalPasteVersion >= 2) serialises presses itself: every request is answered, no debounce.
-        const hostSerialises = (window.api?.globalPasteVersion ?? 1) >= 2;
-
-        if (isPasteModeActive && window.api?.onRequestNextPaste) {
-            cleanupPaste = window.api.onRequestNextPaste(() => {
-                const now = Date.now();
-                if (!hostSerialises && now - lastPasteTime < 300) return; // Old host: prevent double trigger within 300ms
-                lastPasteTime = now;
-
-                // At most one executeGlobalPaste per request.
-                const selectedIndex = globalState.slots.findIndex(s => s.state === 'selected');
-                const index = selectedIndex !== -1 ? selectedIndex : globalState.slots.findIndex(s => s.state === 'filled');
-                const targetSlot = index !== -1 ? globalState.slots[index] : null;
-                if (targetSlot && targetSlot.content && targetSlot.type) {
-                    if (selectedIndex === -1) setSelectedSlot(index);
-                    lastPasted = { index, slot: { state: 'filled', type: targetSlot.type, content: targetSlot.content }, at: now };
-                    window.api?.executeGlobalPaste({ type: targetSlot.type, content: targetSlot.content });
-                    pasteNextItem();
-                }
-            });
-        }
-        return () => {
-            if (cleanupPaste) cleanupPaste();
-        };
-    }, [isPasteModeActive]);
-
-    // Host v2: nothing was pasted (clipboard write failed / no accessibility) -> put the item back so no slot is skipped.
-    useEffect(() => {
-        if (!window.api?.onClipboardPasteError) return undefined;
-        return window.api.onClipboardPasteError(() => {
-            restoreLastPasted();
-        });
-    }, []);
-
-    useEffect(() => {
-        const hasPasteable = slots.some(s => s.state === 'filled' || s.state === 'selected');
-        if (isPasteModeActive && !hasPasteable) {
-            window.api?.setGlobalPasteMode?.(false);
-            // Also update global state
-            globalState.isPasteModeActive = false;
-            notify();
-        }
-    }, [isPasteModeActive, slots]);
+    // IPC wiring, paste-request listener and paste-mode auto-disable live in the shared engine (see startClipboardEngine).
+    useEffect(() => startClipboardEngine({ publishTile: false }), []);
 
     const handleSlotClick = (e, index, state) => {
         e.preventDefault();
@@ -629,6 +567,373 @@ const SettingsPanelUI = () => {
     );
 };
 
+// --- Canli: bar tile + panel (new KoBar only) ---
+// On a host that has the bar tile API the inline widget is not registered; a sidebar button with a `meter` tile and a
+// panel are used instead. Old hosts keep the inline widget above unchanged.
+
+const ICON_FONT = "'Material Symbols Rounded', 'Material Symbols Outlined'";
+const iconStyle = (fill, size) => ({
+    fontFamily: ICON_FONT,
+    fontVariationSettings: `'FILL' ${fill ? 1 : 0}, 'wght' 400`,
+    fontSize: size
+});
+
+const CLIPBOARD_BTN_ID = 'kobar-clipboard-manager-btn';
+const CLIPBOARD_PANEL_ID = 'kobar-clipboard-manager-panel';
+const TILE_MAX_SLOTS = 12;
+
+const TILE_STRINGS = {
+    en: { clear: "Clear", tile: "Clipboard Manager — {f} of {n} slots filled", tileCapped: "Clipboard Manager — {f} of {n} slots filled (first {n} of {all} shown)", close: "Close", search: "Search", noMatch: "No matching items", resetAll: "Clear all", slot: "Slot" },
+    tr: { clear: "Temizle", tile: "Pano yöneticisi — {n} yuvadan {f} dolu", tileCapped: "Pano yöneticisi — ilk {n} yuvadan {f} dolu (toplam {all} yuva)", close: "Kapat", search: "Ara", noMatch: "Eşleşen öğe yok", resetAll: "Tümünü temizle", slot: "Yuva" },
+    de: { clear: "Leeren", tile: "Zwischenablage — {f} von {n} Plätzen belegt", tileCapped: "Zwischenablage — {f} von den ersten {n} Plätzen belegt (insgesamt {all})", close: "Schließen", search: "Suchen", noMatch: "Keine passenden Einträge", resetAll: "Alle leeren", slot: "Platz" },
+    fr: { clear: "Effacer", tile: "Presse-papiers — {f} emplacements sur {n} remplis", tileCapped: "Presse-papiers — {f} sur les {n} premiers emplacements remplis (total {all})", close: "Fermer", search: "Rechercher", noMatch: "Aucun élément correspondant", resetAll: "Tout effacer", slot: "Emplacement" },
+    es: { clear: "Borrar", tile: "Portapapeles — {f} de {n} ranuras llenas", tileCapped: "Portapapeles — {f} de las primeras {n} ranuras llenas (total {all})", close: "Cerrar", search: "Buscar", noMatch: "Sin elementos coincidentes", resetAll: "Borrar todo", slot: "Ranura" },
+    ru: { clear: "Очистить", tile: "Буфер обмена — заполнено {f} из {n} ячеек", tileCapped: "Буфер обмена — заполнено {f} из первых {n} ячеек (всего {all})", close: "Закрыть", search: "Поиск", noMatch: "Ничего не найдено", resetAll: "Очистить всё", slot: "Ячейка" },
+    ja: { clear: "クリア", tile: "クリップボード — {n} スロット中 {f} 使用中", tileCapped: "クリップボード — 最初の {n} スロット中 {f} 使用中（全 {all}）", close: "閉じる", search: "検索", noMatch: "一致する項目なし", resetAll: "すべてクリア", slot: "スロット" },
+    zh: { clear: "清除", tile: "剪贴板 — {n} 个插槽中已用 {f} 个", tileCapped: "剪贴板 — 前 {n} 个插槽中已用 {f} 个（共 {all} 个）", close: "关闭", search: "搜索", noMatch: "没有匹配项", resetAll: "全部清除", slot: "插槽" },
+    ar: { clear: "مسح", tile: "مدير الحافظة — {f} من {n} خانات ممتلئة", tileCapped: "مدير الحافظة — {f} من أول {n} خانات ممتلئة (الإجمالي {all})", close: "إغلاق", search: "بحث", noMatch: "لا توجد عناصر مطابقة", resetAll: "مسح الكل", slot: "خانة" },
+    hi: { clear: "साफ़ करें", tile: "क्लिपबोर्ड — {n} में से {f} स्लॉट भरे", tileCapped: "क्लिपबोर्ड — पहले {n} में से {f} स्लॉट भरे (कुल {all})", close: "बंद करें", search: "खोजें", noMatch: "कोई मेल खाता आइटम नहीं", resetAll: "सब साफ़ करें", slot: "स्लॉट" },
+};
+
+let tileLocale = null;
+const curLang = () => tileLocale || window.useAppStore?.getState?.().language || 'en';
+const tt = (key, vars) => {
+    const dict = TILE_STRINGS[curLang()] || TILE_STRINGS.en;
+    let out = dict[key] || TILE_STRINGS.en[key] || key;
+    if (vars) {
+        let fmt;
+        try { fmt = new Intl.NumberFormat(curLang()); } catch (e) { fmt = new Intl.NumberFormat('en'); }
+        Object.keys(vars).forEach((k) => { out = out.split('{' + k + '}').join(fmt.format(vars[k])); });
+    }
+    return out;
+};
+
+const tileExt = () => {
+    const ext = window.KoBarExtensions;
+    return typeof ext?.setBarItemState === 'function' ? ext : null;
+};
+
+// Presentation only: counts, never content.
+const publishClipboardTile = () => {
+    const ext = tileExt();
+    if (!ext) return;
+    try {
+        const all = globalState.slots.length;
+        const shown = globalState.slots.slice(0, TILE_MAX_SLOTS);
+        const total = shown.length;
+        const filled = shown.filter(s => s.state === 'filled' || s.state === 'selected').length;
+        let next = shown.findIndex(s => s.state === 'listening');
+        if (next === -1) next = shown.findIndex(s => s.state === 'empty');
+        const slots = { filled, total };
+        if (next !== -1) slots.next = next;
+        ext.setBarItemState(CLIPBOARD_BTN_ID, {
+            label: all > total ? tt('tileCapped', { f: filled, n: total, all }) : tt('tile', { f: filled, n: total }),
+            value: filled + '/' + total,
+            slots,
+            icon: 'content_paste'
+        });
+    } catch (e) { /* ignore */ }
+};
+
+// Shared engine: clipboard IPC wiring, request-next-paste listener (attached only while paste mode is on) and the
+// paste-mode auto-disable. Used by the inline widget (old host, mount/unmount) and by the tile host (bar lifetime).
+const startClipboardEngine = ({ publishTile }) => {
+    if (window.__kobarClipboardEngineStop) { try { window.__kobarClipboardEngineStop(); } catch (e) { /* ignore */ } }
+    let cleanupUpdate = null;
+    let cleanupPaste = null;
+    let cleanupError = null;
+    let pasteAttached = false;
+    let lastPasteTime = 0; // Debounce state (old hosts only), reset whenever the listener is attached
+    const hostSerialises = (window.api?.globalPasteVersion ?? 1) >= 2;
+
+    if (window.api?.onClipboardUpdate) {
+        cleanupUpdate = window.api.onClipboardUpdate((data) => {
+            addClipboardItem(data.type, data.content);
+        });
+    }
+    if (window.api?.onClipboardPasteError) {
+        cleanupError = window.api.onClipboardPasteError(() => { restoreLastPasted(); });
+    }
+
+    const onRequestNextPaste = () => {
+        const now = Date.now();
+        if (!hostSerialises && now - lastPasteTime < 300) return;
+        lastPasteTime = now;
+        const selectedIndex = globalState.slots.findIndex(s => s.state === 'selected');
+        const index = selectedIndex !== -1 ? selectedIndex : globalState.slots.findIndex(s => s.state === 'filled');
+        const targetSlot = index !== -1 ? globalState.slots[index] : null;
+        if (targetSlot && targetSlot.content && targetSlot.type) {
+            if (selectedIndex === -1) setSelectedSlot(index);
+            lastPasted = { index, slot: { state: 'filled', type: targetSlot.type, content: targetSlot.content }, at: now };
+            window.api?.executeGlobalPaste({ type: targetSlot.type, content: targetSlot.content });
+            pasteNextItem();
+        }
+    };
+
+    const sync = () => {
+        const wantPaste = globalState.isPasteModeActive && !!window.api?.onRequestNextPaste;
+        if (wantPaste && !pasteAttached) {
+            lastPasteTime = 0;
+            cleanupPaste = window.api.onRequestNextPaste(onRequestNextPaste);
+            pasteAttached = true;
+        } else if (!wantPaste && pasteAttached) {
+            if (cleanupPaste) cleanupPaste();
+            cleanupPaste = null;
+            pasteAttached = false;
+        }
+        const hasPasteable = globalState.slots.some(s => s.state === 'filled' || s.state === 'selected');
+        if (globalState.isPasteModeActive && !hasPasteable) {
+            window.api?.setGlobalPasteMode?.(false);
+            globalState.isPasteModeActive = false;
+            notify();
+            return;
+        }
+        if (publishTile) publishClipboardTile();
+    };
+    listeners.add(sync);
+    sync();
+
+    const stop = () => {
+        listeners.delete(sync);
+        if (cleanupUpdate) cleanupUpdate();
+        if (cleanupPaste) cleanupPaste();
+        if (cleanupError) cleanupError();
+        if (window.__kobarClipboardEngineStop === stop) window.__kobarClipboardEngineStop = null;
+    };
+    window.__kobarClipboardEngineStop = stop;
+    return stop;
+};
+
+const SLOT_TYPE_ICON = { text: 'notes', image: 'image' };
+
+const ClipboardPanel = (props) => {
+    const { onClose, anchorRect } = props;
+    const store = window.useAppStore();
+    const { slots, isCopyModeActive, isPasteModeActive } = usePluginStore();
+    const [query, setQuery] = useState('');
+    const popupRef = useRef(null);
+    const lang = store.language;
+    const tr = (key) => {
+        const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+        return dict[key] || TRANSLATIONS.en[key] || key;
+    };
+    const tl = (key) => {
+        const dict = TILE_STRINGS[lang] || TILE_STRINGS.en;
+        return dict[key] || TILE_STRINGS.en[key] || key;
+    };
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, []);
+
+    const { edgePosition, screenBounds, orientation, sidebarPosition } = store;
+    const smart = store.isPopupSmartPositioning;
+    const smartRef = useRef(smart);
+    useEffect(() => { smartRef.current = smart; }, [smart]);
+
+    const POPUP_W = 340;
+    const POPUP_H = 440;
+    const place = (offX, offY) => {
+        const sbX = (screenBounds?.x ?? 0) - window.screenX;
+        const sbY = (screenBounds?.y ?? 0) - window.screenY;
+        if (orientation === 'horizontal') {
+            const sw = screenBounds?.width ?? 1200;
+            let left = (anchorRect.left - offX) + (anchorRect.width / 2) - (POPUP_W / 2);
+            const maxLeft = sbX + (sw - offX) - POPUP_W - 20;
+            const minLeft = sbX - offX + 20;
+            return Math.min(Math.max(left, minLeft), maxLeft);
+        }
+        const sh = screenBounds?.height ?? 800;
+        let top = (anchorRect.top - offY) - 20 + (anchorRect.height / 2) - (POPUP_H / 2);
+        const maxTop = sbY + (sh - offY) - POPUP_H - 20;
+        const minTop = sbY - offY + 20;
+        return Math.min(Math.max(top, minTop), maxTop);
+    };
+
+    const getPopupStyle = () => {
+        if (!anchorRect) return { display: 'none' };
+        const style = {
+            position: 'absolute',
+            zIndex: 99999,
+            width: POPUP_W,
+            padding: 20,
+            backgroundColor: 'var(--kb-bg-shell, var(--theme-bg-dark, #1b1e27))',
+            border: '1px solid var(--kb-stroke-subtle, var(--theme-border, rgba(255,255,255,0.1)))',
+            borderRadius: 32,
+            boxShadow: 'var(--kb-shadow-e3, 0 12px 32px rgba(0,0,0,0.45))',
+            color: 'var(--kb-fg-1, #f2f3f7)',
+            willChange: 'transform, opacity'
+        };
+        const offX = sidebarPosition ? sidebarPosition.x : 0;
+        const offY = sidebarPosition ? sidebarPosition.y : 0;
+        if (orientation === 'horizontal') {
+            if (!smart) { style.left = '50%'; style.transform = 'translateX(-50%)'; }
+            else style.left = place(offX, offY);
+            if (edgePosition === 'top') { style.top = '100%'; style.marginTop = '12px'; }
+            else { style.bottom = '100%'; style.marginBottom = '12px'; }
+        } else {
+            if (!smart) { style.top = '50%'; style.transform = 'translateY(-50%)'; }
+            else style.top = place(offX, offY);
+            if (edgePosition === 'left') { style.left = '100%'; style.marginLeft = '12px'; }
+            else { style.right = '100%'; style.marginRight = '12px'; }
+        }
+        return style;
+    };
+
+    useEffect(() => {
+        const onDrag = (e) => {
+            if (!popupRef.current || !anchorRect || !smartRef.current) return;
+            const v = place(e.detail.x, e.detail.y);
+            if (orientation === 'horizontal') popupRef.current.style.left = `${v}px`;
+            else popupRef.current.style.top = `${v}px`;
+        };
+        document.addEventListener('kobar-drag', onDrag);
+        return () => document.removeEventListener('kobar-drag', onDrag);
+    }, [anchorRect, screenBounds, orientation]);
+
+    const tileBg = 'var(--kb-bg-tile, var(--theme-surface, #242833))';
+    const insetBg = 'var(--kb-bg-inset, rgba(255,255,255,0.06))';
+    const accent = 'var(--kb-accent, var(--theme-primary, #8b9cff))';
+    const tonal = { background: 'var(--kb-bg-container, var(--theme-accent-glow, rgba(99,102,241,0.18)))', color: 'var(--kb-on-container, var(--kb-fg-1, #f2f3f7))' };
+    const filledStyle = { background: accent, color: 'var(--kb-on-accent, #101218)' };
+
+    const filledCount = slots.filter(s => s.state === 'filled' || s.state === 'selected').length;
+    const q = query.trim().toLowerCase();
+    const items = slots.map((slot, index) => ({ slot, index })).filter(({ slot }) => {
+        if (!q) return true;
+        return typeof slot.content === 'string' && slot.type !== 'image' && slot.content.toLowerCase().includes(q);
+    });
+
+    const preview = (slot) => {
+        if (!slot.content) return tr('emptySlotTip');
+        if (slot.type === 'image') return tr('imagePreview');
+        const c = String(slot.content).replace(/\s+/g, ' ');
+        return c.length > 60 ? c.slice(0, 60) + '...' : c;
+    };
+
+    // Same calls, order and conditions as the inline widget's handleSlotClick (the panel lists the content itself,
+    // so there is no separate preview bubble to toggle).
+    const onRowClick = (index, state) => {
+        if (!isCopyModeActive && (state === 'filled' || state === 'selected')) {
+            if (isPasteModeActive) {
+                setSelectedSlot(index);
+                const slotData = slots[index];
+                if (slotData && slotData.content && slotData.type) {
+                    window.api?.writeToClipboard({ type: slotData.type, content: slotData.content });
+                }
+            }
+            return;
+        }
+        if (isCopyModeActive && state === 'empty') {
+            setListeningSlot(index);
+        }
+    };
+
+    const pill = (active, base) => ({
+        height: 40, borderRadius: 999, gap: 8, padding: '0 16px', fontSize: 13, fontWeight: 600,
+        ...(active ? filledStyle : base)
+    });
+
+    return (
+        <div ref={popupRef} className="pointer-events-auto overflow-hidden flex flex-col" style={{ ...getPopupStyle(), gap: 16 }}>
+            <div className="flex items-center" style={{ gap: 12 }}>
+                <div className="flex items-center justify-center shrink-0" style={{ width: 44, height: 44, borderRadius: 15, ...tonal, color: accent }}>
+                    <span className="material-symbols-outlined" style={iconStyle(true, 24)}>content_paste</span>
+                </div>
+                <div className="flex-1 min-w-0 drag-region">
+                    <div className="truncate" style={{ fontFamily: 'var(--kb-font-display, inherit)', fontSize: 19, fontWeight: 600, lineHeight: 1.2 }}>{tr('copyAndPaste')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--kb-fg-2, #b4b8c6)', fontVariantNumeric: 'tabular-nums' }}>{filledCount}/{slots.length}</div>
+                </div>
+                <button
+                    onClick={onClose}
+                    aria-label={tl('close')}
+                    title={tl('close')}
+                    className="flex items-center justify-center shrink-0 no-drag-region"
+                    style={{ width: 36, height: 36, borderRadius: 999, background: insetBg, color: 'var(--kb-fg-1, #f2f3f7)' }}
+                >
+                    <span className="material-symbols-outlined" style={iconStyle(false, 20)}>close</span>
+                </button>
+            </div>
+
+            <div className="flex no-drag-region" style={{ gap: 8 }}>
+                <button onClick={toggleCopyMode} aria-pressed={isCopyModeActive} className="flex-1 flex items-center justify-center" style={pill(isCopyModeActive, tonal)}>
+                    <span className="material-symbols-outlined" style={iconStyle(isCopyModeActive, 20)}>content_copy</span>
+                    {isCopyModeActive ? tr('stopCopyMode') : tr('copy')}
+                </button>
+                <button onClick={togglePasteMode} aria-pressed={isPasteModeActive} className="flex-1 flex items-center justify-center" style={pill(isPasteModeActive, tonal)}>
+                    <span className="material-symbols-outlined" style={iconStyle(isPasteModeActive, 20)}>content_paste</span>
+                    {isPasteModeActive ? tr('stopPasteMode') : tr('paste')}
+                </button>
+            </div>
+
+            {slots.length > 7 && (
+                <div className="flex items-center no-drag-region" style={{ height: 40, borderRadius: 999, background: insetBg, padding: '0 14px', gap: 8 }}>
+                    <span className="material-symbols-outlined" style={{ ...iconStyle(false, 20), color: 'var(--kb-fg-3, #868b9b)' }}>search</span>
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder={tl('search')}
+                        aria-label={tl('search')}
+                        className="flex-1 min-w-0 border-none outline-none text-sm"
+                        style={{ background: 'transparent', color: 'var(--kb-fg-1, #f2f3f7)' }}
+                    />
+                </div>
+            )}
+
+            <div className="overflow-y-auto custom-scrollbar flex flex-col no-drag-region" style={{ gap: 8, maxHeight: 280 }}>
+                {items.length === 0 && (
+                    <div className="text-center text-sm" style={{ color: 'var(--kb-fg-2, #b4b8c6)', margin: '16px 0' }}>{tl('noMatch')}</div>
+                )}
+                {items.map(({ slot, index }) => {
+                    const selected = slot.state === 'selected';
+                    const filled = slot.state === 'filled' || selected;
+                    const icon = filled ? (SLOT_TYPE_ICON[slot.type] || 'notes') : slot.state === 'listening' ? 'hearing' : 'inbox';
+                    const clickable = (isCopyModeActive && slot.state === 'empty') || (isPasteModeActive && slot.state === 'filled');
+                    return (
+                        <div
+                            key={index}
+                            onClick={() => onRowClick(index, slot.state)}
+                            className="flex items-center"
+                            style={{
+                                gap: 12, minHeight: 52, padding: '6px 8px 6px 8px', borderRadius: 16, background: tileBg,
+                                outline: selected || slot.state === 'listening' ? `2px solid ${accent}` : 'none', outlineOffset: -2,
+                                cursor: clickable ? 'pointer' : 'default',
+                                opacity: slot.state === 'empty' && !clickable ? 0.7 : 1
+                            }}
+                        >
+                            <div className="flex items-center justify-center shrink-0" style={{ width: 36, height: 36, borderRadius: 12, ...(filled ? tonal : { background: insetBg, color: 'var(--kb-fg-3, #868b9b)' }) }}>
+                                <span className="material-symbols-outlined" style={iconStyle(selected, 20)}>{icon}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div style={{ fontSize: 11, color: 'var(--kb-fg-2, #b4b8c6)', fontVariantNumeric: 'tabular-nums' }}>{tl('slot')} {index + 1}</div>
+                                <div className="truncate" style={{ fontSize: 13, color: filled ? 'var(--kb-fg-1, #f2f3f7)' : 'var(--kb-fg-2, #b4b8c6)', fontStyle: slot.type === 'image' ? 'italic' : 'normal' }}>{preview(slot)}</div>
+                            </div>
+                            {slot.state === 'filled' && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); clearSlot(index); }}
+                                    aria-label={tl('clear')}
+                                    className="flex items-center justify-center shrink-0"
+                                    style={{ width: 32, height: 32, borderRadius: 999, background: insetBg, color: 'var(--kb-fg-2, #b4b8c6)' }}
+                                >
+                                    <span className="material-symbols-outlined" style={iconStyle(false, 18)}>delete</span>
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            <button onClick={resetAll} className="flex items-center justify-center no-drag-region" style={{ height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--kb-fg-2, #b4b8c6)' }}>
+                <span className="material-symbols-outlined" style={iconStyle(false, 18)}>delete_sweep</span>
+                {tl('resetAll')}
+            </button>
+        </div>
+    );
+};
+
 // --- Plugin Registration ---
 
 // Remove old button/panel if hot-reloading
@@ -639,8 +944,43 @@ if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete('kobar-clipboard-manager-panel');
 }
 
-// Register the Inline Widget instead of a sidebar button
-if (window.KoBarExtensions?.registerInlineWidget) {
+const HAS_TILE_API = typeof window.KoBarExtensions?.setBarItemState === 'function';
+
+if (HAS_TILE_API && window.KoBarExtensions?.registerSidebarButton) {
+    // Canli host: meter tile on a sidebar button + panel (no inline widget).
+    window.KoBarExtensions.registerSidebarButton({
+        id: CLIPBOARD_BTN_ID,
+        icon: 'content_paste',
+        label: 'Clipboard Manager',
+        tile: { template: 'meter', sensitive: true },
+        onClick: (e, anchorRect) => {
+            const st = window.useAppStore.getState();
+            const isOpen = st.activeExtensionPanelId === CLIPBOARD_PANEL_ID;
+            st.closeAllUtilityPopups();
+            if (!isOpen) {
+                window.useAppStore.setState({ activeExtensionPanelId: CLIPBOARD_PANEL_ID, activeExtensionAnchorRect: anchorRect });
+            } else {
+                window.useAppStore.setState({ activeExtensionPanelId: null, activeExtensionAnchorRect: null });
+            }
+        }
+    });
+    window.KoBarExtensions.registerPanel(CLIPBOARD_PANEL_ID, {
+        id: CLIPBOARD_PANEL_ID,
+        render: (props) => window.React.createElement(ClipboardPanel, props)
+    });
+    startClipboardEngine({ publishTile: true });
+    if (typeof window.KoBarExtensions.onBarItemChange === 'function') {
+        try {
+            window.KoBarExtensions.onBarItemChange(CLIPBOARD_BTN_ID, (c) => {
+                if (c && c.locale && c.locale !== tileLocale) {
+                    tileLocale = c.locale;
+                    publishClipboardTile();
+                }
+            });
+        } catch (e) { /* ignore */ }
+    }
+} else if (window.KoBarExtensions?.registerInlineWidget) {
+    // Old host: inline widget exactly as before.
     window.KoBarExtensions.registerInlineWidget('kobar-clipboard-manager-inline', {
         id: 'kobar-clipboard-manager-inline',
         render: () => window.React.createElement(InlineClipboardUI)
