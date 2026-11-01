@@ -531,16 +531,16 @@
   const CLIPBOARD_PANEL_ID = "kobar-clipboard-manager-panel";
   const TILE_MAX_SLOTS = 12;
   const TILE_STRINGS = {
-    en: { clear: "Clear", tile: "Clipboard Manager — {f} of {n} slots filled", tileCapped: "Clipboard Manager — {f} of {n} slots filled (first {n} of {all} shown)", close: "Close", search: "Search", noMatch: "No matching items", resetAll: "Clear all", slot: "Slot" },
-    tr: { clear: "Temizle", tile: "Pano yöneticisi — {n} yuvadan {f} dolu", tileCapped: "Pano yöneticisi — ilk {n} yuvadan {f} dolu (toplam {all} yuva)", close: "Kapat", search: "Ara", noMatch: "Eşleşen öğe yok", resetAll: "Tümünü temizle", slot: "Yuva" },
-    de: { clear: "Leeren", tile: "Zwischenablage — {f} von {n} Plätzen belegt", tileCapped: "Zwischenablage — {f} von den ersten {n} Plätzen belegt (insgesamt {all})", close: "Schließen", search: "Suchen", noMatch: "Keine passenden Einträge", resetAll: "Alle leeren", slot: "Platz" },
-    fr: { clear: "Effacer", tile: "Presse-papiers — {f} emplacements sur {n} remplis", tileCapped: "Presse-papiers — {f} sur les {n} premiers emplacements remplis (total {all})", close: "Fermer", search: "Rechercher", noMatch: "Aucun élément correspondant", resetAll: "Tout effacer", slot: "Emplacement" },
-    es: { clear: "Borrar", tile: "Portapapeles — {f} de {n} ranuras llenas", tileCapped: "Portapapeles — {f} de las primeras {n} ranuras llenas (total {all})", close: "Cerrar", search: "Buscar", noMatch: "Sin elementos coincidentes", resetAll: "Borrar todo", slot: "Ranura" },
-    ru: { clear: "Очистить", tile: "Буфер обмена — заполнено {f} из {n} ячеек", tileCapped: "Буфер обмена — заполнено {f} из первых {n} ячеек (всего {all})", close: "Закрыть", search: "Поиск", noMatch: "Ничего не найдено", resetAll: "Очистить всё", slot: "Ячейка" },
-    ja: { clear: "クリア", tile: "クリップボード — {n} スロット中 {f} 使用中", tileCapped: "クリップボード — 最初の {n} スロット中 {f} 使用中（全 {all}）", close: "閉じる", search: "検索", noMatch: "一致する項目なし", resetAll: "すべてクリア", slot: "スロット" },
-    zh: { clear: "清除", tile: "剪贴板 — {n} 个插槽中已用 {f} 个", tileCapped: "剪贴板 — 前 {n} 个插槽中已用 {f} 个（共 {all} 个）", close: "关闭", search: "搜索", noMatch: "没有匹配项", resetAll: "全部清除", slot: "插槽" },
-    ar: { clear: "مسح", tile: "مدير الحافظة — {f} من {n} خانات ممتلئة", tileCapped: "مدير الحافظة — {f} من أول {n} خانات ممتلئة (الإجمالي {all})", close: "إغلاق", search: "بحث", noMatch: "لا توجد عناصر مطابقة", resetAll: "مسح الكل", slot: "خانة" },
-    hi: { clear: "साफ़ करें", tile: "क्लिपबोर्ड — {n} में से {f} स्लॉट भरे", tileCapped: "क्लिपबोर्ड — पहले {n} में से {f} स्लॉट भरे (कुल {all})", close: "बंद करें", search: "खोजें", noMatch: "कोई मेल खाता आइटम नहीं", resetAll: "सब साफ़ करें", slot: "स्लॉट" }
+    en: { clear: "Clear", tile: "Clipboard Manager — {f} of {n} slots filled", tileCapped: "Clipboard Manager — {f} of {n} slots filled (first {n} of {all} shown)", close: "Close", search: "Search", noMatch: "No matching items", resetAll: "Clear all", slot: "Slot", hintIdle: "Copy several things, then paste them in order.", hintCopy: "Listening. Copy something and it fills slot {n}.", hintPaste: "Paste mode. Each paste inserts the next item, starting at slot {n}.", next: "Next" },
+    tr: { clear: "Temizle", tile: "Pano yöneticisi — {n} yuvadan {f} dolu", tileCapped: "Pano yöneticisi — ilk {n} yuvadan {f} dolu (toplam {all} yuva)", close: "Kapat", search: "Ara", noMatch: "Eşleşen öğe yok", resetAll: "Tümünü temizle", slot: "Yuva", hintIdle: "Birkaç şey kopyalayın, sonra sırayla yapıştırın.", hintCopy: "Dinleniyor. Kopyaladığınız şey {n}. yuvaya girer.", hintPaste: "Yapıştırma modu. Her yapıştırma sıradaki öğeyi ekler, {n}. yuvadan başlar.", next: "Sıradaki" },
+    de: { clear: "Leeren", tile: "Zwischenablage — {f} von {n} Plätzen belegt", tileCapped: "Zwischenablage — {f} von den ersten {n} Plätzen belegt (insgesamt {all})", close: "Schließen", search: "Suchen", noMatch: "Keine passenden Einträge", resetAll: "Alle leeren", slot: "Platz", hintIdle: "Mehrere Dinge kopieren, dann der Reihe nach einfügen.", hintCopy: "Hört zu. Kopiertes füllt Platz {n}.", hintPaste: "Einfügemodus. Jedes Einfügen setzt das nächste Element ein, ab Platz {n}.", next: "Nächstes" },
+    fr: { clear: "Effacer", tile: "Presse-papiers — {f} emplacements sur {n} remplis", tileCapped: "Presse-papiers — {f} sur les {n} premiers emplacements remplis (total {all})", close: "Fermer", search: "Rechercher", noMatch: "Aucun élément correspondant", resetAll: "Tout effacer", slot: "Emplacement", hintIdle: "Copiez plusieurs éléments, puis collez-les dans l'ordre.", hintCopy: "À l'écoute. Ce que vous copiez remplit l'emplacement {n}.", hintPaste: "Mode collage. Chaque collage insère l'élément suivant, à partir de l'emplacement {n}.", next: "Suivant" },
+    es: { clear: "Borrar", tile: "Portapapeles — {f} de {n} ranuras llenas", tileCapped: "Portapapeles — {f} de las primeras {n} ranuras llenas (total {all})", close: "Cerrar", search: "Buscar", noMatch: "Sin elementos coincidentes", resetAll: "Borrar todo", slot: "Ranura", hintIdle: "Copie varias cosas y péguelas en orden.", hintCopy: "Escuchando. Lo que copie llena la ranura {n}.", hintPaste: "Modo pegar. Cada pegado inserta el siguiente elemento, desde la ranura {n}.", next: "Siguiente" },
+    ru: { clear: "Очистить", tile: "Буфер обмена — заполнено {f} из {n} ячеек", tileCapped: "Буфер обмена — заполнено {f} из первых {n} ячеек (всего {all})", close: "Закрыть", search: "Поиск", noMatch: "Ничего не найдено", resetAll: "Очистить всё", slot: "Ячейка", hintIdle: "Скопируйте несколько элементов, затем вставьте их по порядку.", hintCopy: "Слушаю. Скопированное попадёт в ячейку {n}.", hintPaste: "Режим вставки. Каждая вставка добавляет следующий элемент, начиная с ячейки {n}.", next: "Далее" },
+    ja: { clear: "クリア", tile: "クリップボード — {n} スロット中 {f} 使用中", tileCapped: "クリップボード — 最初の {n} スロット中 {f} 使用中（全 {all}）", close: "閉じる", search: "検索", noMatch: "一致する項目なし", resetAll: "すべてクリア", slot: "スロット", hintIdle: "複数をコピーして、順番に貼り付けます。", hintCopy: "待機中。コピーするとスロット {n} に入ります。", hintPaste: "貼り付けモード。スロット {n} から順に貼り付けます。", next: "次" },
+    zh: { clear: "清除", tile: "剪贴板 — {n} 个插槽中已用 {f} 个", tileCapped: "剪贴板 — 前 {n} 个插槽中已用 {f} 个（共 {all} 个）", close: "关闭", search: "搜索", noMatch: "没有匹配项", resetAll: "全部清除", slot: "插槽", hintIdle: "先复制多项内容，再按顺序粘贴。", hintCopy: "正在监听。复制的内容将放入插槽 {n}。", hintPaste: "粘贴模式。每次粘贴都会插入下一项，从插槽 {n} 开始。", next: "下一个" },
+    ar: { clear: "مسح", tile: "مدير الحافظة — {f} من {n} خانات ممتلئة", tileCapped: "مدير الحافظة — {f} من أول {n} خانات ممتلئة (الإجمالي {all})", close: "إغلاق", search: "بحث", noMatch: "لا توجد عناصر مطابقة", resetAll: "مسح الكل", slot: "خانة", hintIdle: "انسخ عدة عناصر ثم الصقها بالترتيب.", hintCopy: "جارٍ الاستماع. ما تنسخه يملأ الخانة {n}.", hintPaste: "وضع اللصق. كل لصق يدرج العنصر التالي بدءًا من الخانة {n}.", next: "التالي" },
+    hi: { clear: "साफ़ करें", tile: "क्लिपबोर्ड — {n} में से {f} स्लॉट भरे", tileCapped: "क्लिपबोर्ड — पहले {n} में से {f} स्लॉट भरे (कुल {all})", close: "बंद करें", search: "खोजें", noMatch: "कोई मेल खाता आइटम नहीं", resetAll: "सब साफ़ करें", slot: "स्लॉट", hintIdle: "कई चीज़ें कॉपी करें, फिर क्रम से पेस्ट करें।", hintCopy: "सुन रहा है। कॉपी की गई चीज़ स्लॉट {n} में जाएगी।", hintPaste: "पेस्ट मोड। हर पेस्ट अगला आइटम डालता है, स्लॉट {n} से शुरू।", next: "अगला" }
   };
   let tileLocale = null;
   const curLang = () => tileLocale || window.useAppStore?.getState?.().language || "en";
@@ -754,9 +754,13 @@
       document.addEventListener("kobar-drag", onDrag);
       return () => document.removeEventListener("kobar-drag", onDrag);
     }, [anchorRect, screenBounds, orientation]);
+    const surface = "var(--kb-bg-surface, var(--theme-surface, #242833))";
     const tileBg = "var(--kb-bg-tile, var(--theme-surface, #242833))";
     const insetBg = "var(--kb-bg-inset, rgba(255,255,255,0.06))";
     const accent = "var(--kb-accent, var(--theme-primary, #8b9cff))";
+    const fg1 = "var(--kb-fg-1, #f2f3f7)";
+    const fg2 = "var(--kb-fg-2, #b4b8c6)";
+    const fg3 = "var(--kb-fg-3, #868b9b)";
     const tonal = { background: "var(--kb-bg-container, var(--theme-accent-glow, rgba(99,102,241,0.18)))", color: "var(--kb-on-container, var(--kb-fg-1, #f2f3f7))" };
     const filledStyle = { background: accent, color: "var(--kb-on-accent, #101218)" };
     const filledCount = slots.filter((s) => s.state === "filled" || s.state === "selected").length;
@@ -786,26 +790,34 @@
         setListeningSlot(index);
       }
     };
-    const pill = (active, base) => ({
-      height: 40,
+    const activeIdx = isCopyModeActive ? slots.findIndex((s) => s.state === "listening") : isPasteModeActive ? slots.findIndex((s) => s.state === "selected") : -1;
+    const hint = isCopyModeActive && activeIdx !== -1 ? tt("hintCopy", { n: activeIdx + 1 }) : isPasteModeActive && activeIdx !== -1 ? tt("hintPaste", { n: activeIdx + 1 }) : tt("hintIdle");
+    const modeBtn = (active, dim) => ({
+      height: 44,
       borderRadius: 999,
       gap: 8,
       padding: "0 16px",
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: 600,
-      ...active ? filledStyle : base
+      border: 0,
+      cursor: "pointer",
+      opacity: dim ? 0.55 : 1,
+      ...active ? filledStyle : tonal
     });
-    return /* @__PURE__ */ window.React.createElement("div", { ref: popupRef, className: "pointer-events-auto overflow-hidden flex flex-col", style: { ...getPopupStyle(), gap: 16 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center", style: { gap: 12 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 44, height: 44, borderRadius: 15, ...tonal, color: accent } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(true, 24) }, "content_paste")), /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 drag-region" }, /* @__PURE__ */ window.React.createElement("div", { style: { fontFamily: "var(--kb-font-display, inherit)", fontSize: 19, fontWeight: 600, lineHeight: 1.2 } }, tr("copyAndPaste")), /* @__PURE__ */ window.React.createElement("div", { style: { fontSize: 12, color: "var(--kb-fg-2, #b4b8c6)", fontVariantNumeric: "tabular-nums" } }, filledCount, "/", slots.length)), /* @__PURE__ */ window.React.createElement(
+    return /* @__PURE__ */ window.React.createElement("div", { ref: popupRef, className: "pointer-events-auto overflow-hidden flex flex-col", style: { ...getPopupStyle(), gap: 16 } }, /* @__PURE__ */ window.React.createElement("style", null, ".kb-clip-btn:focus-visible,.kb-clip-row:focus-visible{outline:2px solid var(--kb-accent, #8b9cff);outline-offset:2px}"), /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center", style: { gap: 12 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 44, height: 44, borderRadius: 16, ...tonal, color: accent } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(true, 24) }, "content_paste")), /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 drag-region" }, /* @__PURE__ */ window.React.createElement("div", { style: { fontFamily: "var(--kb-font-display, inherit)", fontSize: 19, fontWeight: 600, lineHeight: 1.2 } }, tr("copyAndPaste"))), /* @__PURE__ */ window.React.createElement(
       "button",
       {
         onClick: onClose,
         "aria-label": tl("close"),
         title: tl("close"),
-        className: "flex items-center justify-center shrink-0 no-drag-region",
-        style: { width: 36, height: 36, borderRadius: 999, ...tonal }
+        className: "kb-clip-btn flex items-center justify-center shrink-0 no-drag-region",
+        style: { width: 36, height: 36, borderRadius: 999, border: 0, cursor: "pointer", ...tonal }
       },
       /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 20) }, "close")
-    )), /* @__PURE__ */ window.React.createElement("div", { className: "flex no-drag-region", style: { gap: 8 } }, /* @__PURE__ */ window.React.createElement("button", { onClick: toggleCopyMode, "aria-pressed": isCopyModeActive, className: "flex-1 flex items-center justify-center", style: pill(isCopyModeActive, tonal) }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(isCopyModeActive, 20) }, "content_copy"), isCopyModeActive ? tr("stopCopyMode") : tr("copy")), /* @__PURE__ */ window.React.createElement("button", { onClick: togglePasteMode, "aria-pressed": isPasteModeActive, className: "flex-1 flex items-center justify-center", style: pill(isPasteModeActive, tonal) }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(isPasteModeActive, 20) }, "content_paste"), isPasteModeActive ? tr("stopPasteMode") : tr("paste"))), slots.length > 7 && /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center no-drag-region", style: { height: 40, borderRadius: 999, background: insetBg, padding: "0 14px", gap: 8 } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { ...iconStyle(false, 20), color: "var(--kb-fg-3, #868b9b)" } }, "search"), /* @__PURE__ */ window.React.createElement(
+    )), /* @__PURE__ */ window.React.createElement("div", { className: "flex flex-col no-drag-region", style: { gap: 12, background: surface, borderRadius: 24, padding: 16 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-baseline", style: { gap: 8 } }, /* @__PURE__ */ window.React.createElement("span", { style: { fontFamily: "var(--kb-font-display, inherit)", fontSize: 28, fontWeight: 600, lineHeight: 1, fontVariantNumeric: "tabular-nums" } }, filledCount), /* @__PURE__ */ window.React.createElement("span", { style: { fontSize: 14, color: fg2, fontVariantNumeric: "tabular-nums" } }, "/ ", slots.length)), /* @__PURE__ */ window.React.createElement("div", { className: "flex", style: { gap: 3 }, "aria-hidden": "true" }, slots.map((s, i) => {
+      const on = s.state === "filled" || s.state === "selected";
+      return /* @__PURE__ */ window.React.createElement("div", { key: i, style: { flex: 1, height: 6, borderRadius: 3, background: on ? accent : s.state === "listening" ? "var(--kb-accent-soft, rgba(139,156,255,0.5))" : insetBg, opacity: s.state === "listening" ? 0.9 : 1 } });
+    })), /* @__PURE__ */ window.React.createElement("div", { style: { fontSize: 13, color: fg2, lineHeight: 1.4, minHeight: 36 }, "aria-live": "polite" }, hint), /* @__PURE__ */ window.React.createElement("div", { className: "flex", style: { gap: 8 } }, /* @__PURE__ */ window.React.createElement("button", { onClick: toggleCopyMode, "aria-pressed": isCopyModeActive, className: "kb-clip-btn flex-1 flex items-center justify-center", style: modeBtn(isCopyModeActive, false) }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(isCopyModeActive, 20) }, isCopyModeActive ? "stop_circle" : "content_copy"), isCopyModeActive ? tr("stopCopyMode") : tr("copy")), /* @__PURE__ */ window.React.createElement("button", { onClick: togglePasteMode, "aria-pressed": isPasteModeActive, className: "kb-clip-btn flex-1 flex items-center justify-center", style: modeBtn(isPasteModeActive, !isPasteModeActive && filledCount === 0) }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(isPasteModeActive, 20) }, isPasteModeActive ? "stop_circle" : "content_paste"), isPasteModeActive ? tr("stopPasteMode") : tr("paste")))), slots.length > 7 && /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center no-drag-region", style: { height: 40, borderRadius: 999, background: insetBg, padding: "0 14px", gap: 8 } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { ...iconStyle(false, 20), color: fg3 } }, "search"), /* @__PURE__ */ window.React.createElement(
       "input",
       {
         type: "text",
@@ -814,12 +826,13 @@
         placeholder: tl("search"),
         "aria-label": tl("search"),
         className: "flex-1 min-w-0 border-none outline-none text-sm",
-        style: { background: "transparent", color: "var(--kb-fg-1, #f2f3f7)" }
+        style: { background: "transparent", color: fg1 }
       }
-    )), /* @__PURE__ */ window.React.createElement("div", { className: "overflow-y-auto custom-scrollbar flex flex-col no-drag-region", style: { gap: 8, maxHeight: 280 } }, items.length === 0 && /* @__PURE__ */ window.React.createElement("div", { className: "text-center text-sm", style: { color: "var(--kb-fg-2, #b4b8c6)", margin: "16px 0" } }, tl("noMatch")), items.map(({ slot, index }) => {
+    )), /* @__PURE__ */ window.React.createElement("div", { className: "overflow-y-auto custom-scrollbar flex flex-col no-drag-region", style: { gap: 6, maxHeight: 260 } }, items.length === 0 && /* @__PURE__ */ window.React.createElement("div", { className: "text-center text-sm", style: { color: fg2, margin: "16px 0" } }, tl("noMatch")), items.map(({ slot, index }) => {
       const selected = slot.state === "selected";
+      const listening = slot.state === "listening";
       const filled = slot.state === "filled" || selected;
-      const icon = filled ? SLOT_TYPE_ICON[slot.type] || "notes" : slot.state === "listening" ? "hearing" : "inbox";
+      const icon = filled ? SLOT_TYPE_ICON[slot.type] || "notes" : listening ? "hearing" : null;
       const clickable = isCopyModeActive && slot.state === "empty" || isPasteModeActive && slot.state === "filled";
       return /* @__PURE__ */ window.React.createElement(
         "div",
@@ -828,19 +841,20 @@
           onClick: () => onRowClick(index, slot.state),
           className: "flex items-center",
           style: {
+            flexShrink: 0,
             gap: 12,
-            minHeight: 48,
-            padding: "6px 8px 6px 8px",
+            minHeight: filled || listening ? 52 : 36,
+            padding: "0 8px",
             borderRadius: 16,
-            background: tileBg,
-            outline: selected || slot.state === "listening" ? `2px solid ${accent}` : "none",
+            background: filled || listening ? tileBg : "transparent",
+            outline: selected || listening ? `2px solid ${accent}` : "none",
             outlineOffset: -2,
-            cursor: clickable ? "pointer" : "default",
-            opacity: slot.state === "empty" && !clickable ? 0.7 : 1
+            cursor: clickable ? "pointer" : "default"
           }
         },
-        /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 34, height: 34, borderRadius: 12, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", ...filled ? tonal : { background: insetBg, color: "var(--kb-fg-3, #868b9b)" } }, title: `${tl("slot")} ${index + 1}` }, index + 1),
-        /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 flex items-center", style: { gap: 8 } }, filled && /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined shrink-0", style: { ...iconStyle(selected, 18), color: "var(--kb-fg-2, #b4b8c6)" } }, icon), /* @__PURE__ */ window.React.createElement("div", { className: "truncate", style: { fontSize: 13, color: filled ? "var(--kb-fg-1, #f2f3f7)" : "var(--kb-fg-3, #868b9b)", fontStyle: slot.type === "image" ? "italic" : "normal" } }, preview(slot))),
+        /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 28, height: 28, borderRadius: 10, fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums", ...filled ? tonal : { background: insetBg, color: fg3 } }, title: `${tl("slot")} ${index + 1}` }, index + 1),
+        /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 flex items-center", style: { gap: 8 } }, icon && /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined shrink-0", style: { ...iconStyle(selected, 18), color: listening ? accent : fg2 } }, icon), /* @__PURE__ */ window.React.createElement("div", { className: "truncate", style: { fontSize: 13, color: filled ? fg1 : fg3, fontStyle: slot.type === "image" ? "italic" : "normal" } }, preview(slot))),
+        (selected || listening) && /* @__PURE__ */ window.React.createElement("span", { style: { fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, ...filledStyle } }, tl("next")),
         slot.state === "filled" && /* @__PURE__ */ window.React.createElement(
           "button",
           {
@@ -849,13 +863,14 @@
               clearSlot(index);
             },
             "aria-label": tl("clear"),
-            className: "flex items-center justify-center shrink-0",
-            style: { width: 32, height: 32, borderRadius: 999, background: insetBg, color: "var(--kb-fg-2, #b4b8c6)" }
+            title: tl("clear"),
+            className: "kb-clip-btn flex items-center justify-center shrink-0",
+            style: { width: 32, height: 32, borderRadius: 999, border: 0, cursor: "pointer", background: insetBg, color: fg2 }
           },
           /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete")
         )
       );
-    })), /* @__PURE__ */ window.React.createElement("button", { onClick: resetAll, className: "flex items-center justify-center no-drag-region", style: { height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: accent, background: "transparent" } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete_sweep"), tl("resetAll")));
+    })), /* @__PURE__ */ window.React.createElement("button", { onClick: resetAll, className: "kb-clip-btn flex items-center justify-center no-drag-region", style: { height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: accent, background: "transparent", border: 0, cursor: "pointer" } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete_sweep"), tl("resetAll")));
   };
   if (window.KoBarExtensions?.buttons) {
     window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter((b) => b.id !== "kobar-clipboard-manager-btn" && b.id !== CLIPBOARD_BTN_ID);
