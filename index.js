@@ -527,7 +527,7 @@
     fontVariationSettings: `'FILL' ${fill ? 1 : 0}, 'wght' 400`,
     fontSize: size
   });
-  const CLIPBOARD_BTN_ID = "kobar-clipboard-manager-btn";
+  const CLIPBOARD_BTN_ID = "kobar-clipboard-manager-inline";
   const CLIPBOARD_PANEL_ID = "kobar-clipboard-manager-panel";
   const TILE_MAX_SLOTS = 12;
   const TILE_STRINGS = {
@@ -858,7 +858,7 @@
     })), /* @__PURE__ */ window.React.createElement("button", { onClick: resetAll, className: "flex items-center justify-center no-drag-region", style: { height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: "var(--kb-fg-2, #b4b8c6)" } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete_sweep"), tl("resetAll")));
   };
   if (window.KoBarExtensions?.buttons) {
-    window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter((b) => b.id !== "kobar-clipboard-manager-btn");
+    window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter((b) => b.id !== "kobar-clipboard-manager-btn" && b.id !== CLIPBOARD_BTN_ID);
   }
   if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete("kobar-clipboard-manager-panel");

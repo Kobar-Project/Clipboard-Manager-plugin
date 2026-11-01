@@ -578,7 +578,7 @@ const iconStyle = (fill, size) => ({
     fontSize: size
 });
 
-const CLIPBOARD_BTN_ID = 'kobar-clipboard-manager-btn';
+const CLIPBOARD_BTN_ID = 'kobar-clipboard-manager-inline';
 const CLIPBOARD_PANEL_ID = 'kobar-clipboard-manager-panel';
 const TILE_MAX_SLOTS = 12;
 
@@ -938,7 +938,7 @@ const ClipboardPanel = (props) => {
 
 // Remove old button/panel if hot-reloading
 if (window.KoBarExtensions?.buttons) {
-    window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter(b => b.id !== 'kobar-clipboard-manager-btn');
+    window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter(b => b.id !== 'kobar-clipboard-manager-btn' && b.id !== CLIPBOARD_BTN_ID);
 }
 if (window.KoBarExtensions?.panels?.delete) {
     window.KoBarExtensions.panels.delete('kobar-clipboard-manager-panel');
