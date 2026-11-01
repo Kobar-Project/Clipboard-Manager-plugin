@@ -843,7 +843,7 @@ const ClipboardPanel = (props) => {
                     <span className="material-symbols-outlined" style={iconStyle(true, 24)}>content_paste</span>
                 </div>
                 <div className="flex-1 min-w-0 drag-region">
-                    <div className="truncate" style={{ fontFamily: 'var(--kb-font-display, inherit)', fontSize: 19, fontWeight: 600, lineHeight: 1.2 }}>{tr('copyAndPaste')}</div>
+                    <div style={{ fontFamily: 'var(--kb-font-display, inherit)', fontSize: 19, fontWeight: 600, lineHeight: 1.2 }}>{tr('copyAndPaste')}</div>
                     <div style={{ fontSize: 12, color: 'var(--kb-fg-2, #b4b8c6)', fontVariantNumeric: 'tabular-nums' }}>{filledCount}/{slots.length}</div>
                 </div>
                 <button
@@ -851,7 +851,7 @@ const ClipboardPanel = (props) => {
                     aria-label={tl('close')}
                     title={tl('close')}
                     className="flex items-center justify-center shrink-0 no-drag-region"
-                    style={{ width: 36, height: 36, borderRadius: 999, background: insetBg, color: 'var(--kb-fg-1, #f2f3f7)' }}
+                    style={{ width: 36, height: 36, borderRadius: 999, ...tonal }}
                 >
                     <span className="material-symbols-outlined" style={iconStyle(false, 20)}>close</span>
                 </button>
@@ -898,18 +898,18 @@ const ClipboardPanel = (props) => {
                             onClick={() => onRowClick(index, slot.state)}
                             className="flex items-center"
                             style={{
-                                gap: 12, minHeight: 52, padding: '6px 8px 6px 8px', borderRadius: 16, background: tileBg,
+                                gap: 12, minHeight: 48, padding: '6px 8px 6px 8px', borderRadius: 16, background: tileBg,
                                 outline: selected || slot.state === 'listening' ? `2px solid ${accent}` : 'none', outlineOffset: -2,
                                 cursor: clickable ? 'pointer' : 'default',
                                 opacity: slot.state === 'empty' && !clickable ? 0.7 : 1
                             }}
                         >
-                            <div className="flex items-center justify-center shrink-0" style={{ width: 36, height: 36, borderRadius: 12, ...(filled ? tonal : { background: insetBg, color: 'var(--kb-fg-3, #868b9b)' }) }}>
-                                <span className="material-symbols-outlined" style={iconStyle(selected, 20)}>{icon}</span>
+                            <div className="flex items-center justify-center shrink-0" style={{ width: 34, height: 34, borderRadius: 12, fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', ...(filled ? tonal : { background: insetBg, color: 'var(--kb-fg-3, #868b9b)' }) }} title={`${tl('slot')} ${index + 1}`}>
+                                {index + 1}
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div style={{ fontSize: 11, color: 'var(--kb-fg-2, #b4b8c6)', fontVariantNumeric: 'tabular-nums' }}>{tl('slot')} {index + 1}</div>
-                                <div className="truncate" style={{ fontSize: 13, color: filled ? 'var(--kb-fg-1, #f2f3f7)' : 'var(--kb-fg-2, #b4b8c6)', fontStyle: slot.type === 'image' ? 'italic' : 'normal' }}>{preview(slot)}</div>
+                            <div className="flex-1 min-w-0 flex items-center" style={{ gap: 8 }}>
+                                {filled && <span className="material-symbols-outlined shrink-0" style={{ ...iconStyle(selected, 18), color: 'var(--kb-fg-2, #b4b8c6)' }}>{icon}</span>}
+                                <div className="truncate" style={{ fontSize: 13, color: filled ? 'var(--kb-fg-1, #f2f3f7)' : 'var(--kb-fg-3, #868b9b)', fontStyle: slot.type === 'image' ? 'italic' : 'normal' }}>{preview(slot)}</div>
                             </div>
                             {slot.state === 'filled' && (
                                 <button
@@ -926,7 +926,7 @@ const ClipboardPanel = (props) => {
                 })}
             </div>
 
-            <button onClick={resetAll} className="flex items-center justify-center no-drag-region" style={{ height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: 'var(--kb-fg-2, #b4b8c6)' }}>
+            <button onClick={resetAll} className="flex items-center justify-center no-drag-region" style={{ height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: accent, background: 'transparent' }}>
                 <span className="material-symbols-outlined" style={iconStyle(false, 18)}>delete_sweep</span>
                 {tl('resetAll')}
             </button>

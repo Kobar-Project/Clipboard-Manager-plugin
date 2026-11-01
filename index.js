@@ -795,14 +795,14 @@
       fontWeight: 600,
       ...active ? filledStyle : base
     });
-    return /* @__PURE__ */ window.React.createElement("div", { ref: popupRef, className: "pointer-events-auto overflow-hidden flex flex-col", style: { ...getPopupStyle(), gap: 16 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center", style: { gap: 12 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 44, height: 44, borderRadius: 15, ...tonal, color: accent } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(true, 24) }, "content_paste")), /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 drag-region" }, /* @__PURE__ */ window.React.createElement("div", { className: "truncate", style: { fontFamily: "var(--kb-font-display, inherit)", fontSize: 19, fontWeight: 600, lineHeight: 1.2 } }, tr("copyAndPaste")), /* @__PURE__ */ window.React.createElement("div", { style: { fontSize: 12, color: "var(--kb-fg-2, #b4b8c6)", fontVariantNumeric: "tabular-nums" } }, filledCount, "/", slots.length)), /* @__PURE__ */ window.React.createElement(
+    return /* @__PURE__ */ window.React.createElement("div", { ref: popupRef, className: "pointer-events-auto overflow-hidden flex flex-col", style: { ...getPopupStyle(), gap: 16 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center", style: { gap: 12 } }, /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 44, height: 44, borderRadius: 15, ...tonal, color: accent } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(true, 24) }, "content_paste")), /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 drag-region" }, /* @__PURE__ */ window.React.createElement("div", { style: { fontFamily: "var(--kb-font-display, inherit)", fontSize: 19, fontWeight: 600, lineHeight: 1.2 } }, tr("copyAndPaste")), /* @__PURE__ */ window.React.createElement("div", { style: { fontSize: 12, color: "var(--kb-fg-2, #b4b8c6)", fontVariantNumeric: "tabular-nums" } }, filledCount, "/", slots.length)), /* @__PURE__ */ window.React.createElement(
       "button",
       {
         onClick: onClose,
         "aria-label": tl("close"),
         title: tl("close"),
         className: "flex items-center justify-center shrink-0 no-drag-region",
-        style: { width: 36, height: 36, borderRadius: 999, background: insetBg, color: "var(--kb-fg-1, #f2f3f7)" }
+        style: { width: 36, height: 36, borderRadius: 999, ...tonal }
       },
       /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 20) }, "close")
     )), /* @__PURE__ */ window.React.createElement("div", { className: "flex no-drag-region", style: { gap: 8 } }, /* @__PURE__ */ window.React.createElement("button", { onClick: toggleCopyMode, "aria-pressed": isCopyModeActive, className: "flex-1 flex items-center justify-center", style: pill(isCopyModeActive, tonal) }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(isCopyModeActive, 20) }, "content_copy"), isCopyModeActive ? tr("stopCopyMode") : tr("copy")), /* @__PURE__ */ window.React.createElement("button", { onClick: togglePasteMode, "aria-pressed": isPasteModeActive, className: "flex-1 flex items-center justify-center", style: pill(isPasteModeActive, tonal) }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(isPasteModeActive, 20) }, "content_paste"), isPasteModeActive ? tr("stopPasteMode") : tr("paste"))), slots.length > 7 && /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center no-drag-region", style: { height: 40, borderRadius: 999, background: insetBg, padding: "0 14px", gap: 8 } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: { ...iconStyle(false, 20), color: "var(--kb-fg-3, #868b9b)" } }, "search"), /* @__PURE__ */ window.React.createElement(
@@ -829,7 +829,7 @@
           className: "flex items-center",
           style: {
             gap: 12,
-            minHeight: 52,
+            minHeight: 48,
             padding: "6px 8px 6px 8px",
             borderRadius: 16,
             background: tileBg,
@@ -839,8 +839,8 @@
             opacity: slot.state === "empty" && !clickable ? 0.7 : 1
           }
         },
-        /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 36, height: 36, borderRadius: 12, ...filled ? tonal : { background: insetBg, color: "var(--kb-fg-3, #868b9b)" } } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(selected, 20) }, icon)),
-        /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ window.React.createElement("div", { style: { fontSize: 11, color: "var(--kb-fg-2, #b4b8c6)", fontVariantNumeric: "tabular-nums" } }, tl("slot"), " ", index + 1), /* @__PURE__ */ window.React.createElement("div", { className: "truncate", style: { fontSize: 13, color: filled ? "var(--kb-fg-1, #f2f3f7)" : "var(--kb-fg-2, #b4b8c6)", fontStyle: slot.type === "image" ? "italic" : "normal" } }, preview(slot))),
+        /* @__PURE__ */ window.React.createElement("div", { className: "flex items-center justify-center shrink-0", style: { width: 34, height: 34, borderRadius: 12, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", ...filled ? tonal : { background: insetBg, color: "var(--kb-fg-3, #868b9b)" } }, title: `${tl("slot")} ${index + 1}` }, index + 1),
+        /* @__PURE__ */ window.React.createElement("div", { className: "flex-1 min-w-0 flex items-center", style: { gap: 8 } }, filled && /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined shrink-0", style: { ...iconStyle(selected, 18), color: "var(--kb-fg-2, #b4b8c6)" } }, icon), /* @__PURE__ */ window.React.createElement("div", { className: "truncate", style: { fontSize: 13, color: filled ? "var(--kb-fg-1, #f2f3f7)" : "var(--kb-fg-3, #868b9b)", fontStyle: slot.type === "image" ? "italic" : "normal" } }, preview(slot))),
         slot.state === "filled" && /* @__PURE__ */ window.React.createElement(
           "button",
           {
@@ -855,7 +855,7 @@
           /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete")
         )
       );
-    })), /* @__PURE__ */ window.React.createElement("button", { onClick: resetAll, className: "flex items-center justify-center no-drag-region", style: { height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: "var(--kb-fg-2, #b4b8c6)" } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete_sweep"), tl("resetAll")));
+    })), /* @__PURE__ */ window.React.createElement("button", { onClick: resetAll, className: "flex items-center justify-center no-drag-region", style: { height: 36, borderRadius: 999, gap: 6, fontSize: 13, fontWeight: 600, color: accent, background: "transparent" } }, /* @__PURE__ */ window.React.createElement("span", { className: "material-symbols-outlined", style: iconStyle(false, 18) }, "delete_sweep"), tl("resetAll")));
   };
   if (window.KoBarExtensions?.buttons) {
     window.KoBarExtensions.buttons = window.KoBarExtensions.buttons.filter((b) => b.id !== "kobar-clipboard-manager-btn" && b.id !== CLIPBOARD_BTN_ID);
