@@ -1,7 +1,7 @@
 {
   "id": "com.kobar.clipboardmanager",
   "name": "Clipboard Manager",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "Sequential multi-slot clipboard manager for KoBar. Stores your copied items in visual slots and pastes them in order.",
   "author": "KoBar",
   "entry": "index.js",
@@ -24,7 +24,7 @@
     "zh",
     "hi"
   ],
-  "versionNote": "Slots now sit as one block between the Copy and Paste buttons: 2/3/4 rows by density in both vertical and horizontal bars, no overlap with other icons. On the new KoBar, rapid back-to-back Ctrl+V presses are no longer skipped; if a paste fails the item is put back. The preview bubble now stays inside the screen at all edges.",
+  "versionNote": "New design for KoBar 1.5: clear Copy and Paste mode buttons, a slot list with search, and a bar tile with filled slots (hidden in privacy mode).",
   "image": "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/clipboardmanager.png",
   "storeImage": [
     "https://raw.githubusercontent.com/Kobar-Project/KoBar-Assets/main/Plugins%20images/Clipboard%20Manager/Clipboard-Manager1.png",

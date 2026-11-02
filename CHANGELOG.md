@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 - 2026-11-02
 
 - Canlı look: restyled panel (copy/paste mode pills, search, slot rows with icon tiles) in the new KoBar design; bar tile: `meter` tile showing filled/total slots (sensitive, hidden in privacy mode), with the inline widget kept as the fallback on older KoBar versions.
+- Redesigned from its functions: a status card with the Copy / Paste mode buttons (the active mode is the one filled button), slot rows with clear-one and clear-all, search from 7 slots; mode and next-slot hints in words, not only colour.
+- Mode buttons use short single-line labels; empty slots are quieter so filled ones stand out.
 
 ## 1.0.6
 
